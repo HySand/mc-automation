@@ -18,6 +18,7 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | MCLISTS live flow | Real one-shot like request returned the site's explicit success response | Pass |
 | State and redaction | State schema contains only operational fields; exact-value scan found no configured credentials or AI endpoint/key outside `.env` | Pass |
 | Workflow and dependency wiring | `uv lock --check`, CLI dry-run, and Workflow YAML parsing | Pass |
+| Complete step logging | JSONL logs cover CLI, orchestration, HTTP, WDSJFWQ AI/form/count confirmation, and ESA browser/DOM/drag/session stages; sentinel secrets, captcha text, image data, form values, raw bodies, and URL query values are absent | Pass |
 
 Final gate:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from typing import Any
 
@@ -10,6 +11,7 @@ from mc_automation.ai_solver import (
     AISolverError,
     OpenAICompatibleVisionSolver,
 )
+from mc_automation.step_log import LOGGER_NAME
 
 
 class FakeResponse:
@@ -74,6 +76,23 @@ def test_wdsjfwq_captcha_solver_builds_openai_compatible_vision_request() -> Non
     assert call["json"]["model"] == "vision-model"
     image_url = call["json"]["messages"][1]["content"][1]["image_url"]["url"]
     assert image_url == "data:image/png;base64,aW1hZ2U="
+
+
+def test_solver_logs_metadata_without_secret_image_or_captcha(
+    caplog: object,
+) -> None:
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
+    client = FakeClient([FakeResponse(chat_payload('{"code":"AB12","confidence":0.91}'))])
+
+    OpenAICompatibleVisionSolver(config(), client=client).solve_wdsjfwq_captcha(b"image")
+
+    output = "\n".join(record.message for record in caplog.records)  # type: ignore[attr-defined]
+    assert "ai_request" in output
+    assert '"image_bytes":5' in output
+    assert '"code_length":4' in output
+    assert "secret-key" not in output
+    assert "aW1hZ2U=" not in output
+    assert "AB12" not in output
 
 
 def test_solver_fails_closed_on_non_json_model_output() -> None:

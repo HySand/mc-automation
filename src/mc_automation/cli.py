@@ -20,6 +20,7 @@ from .sites.klpbbs import KLPBBSAdapter
 from .sites.like import LikeAdapter
 from .sites.minebbs import MineBBSAdapter
 from .state import StateStore
+from .step_log import log_step
 from .transport import ChallengeResolver, HttpTransport, create_cloudscraper_session
 
 
@@ -53,17 +54,24 @@ def _print_report(report: RunReport) -> None:
 
 def run(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    log_step("application", status="started")
     if args.dry_run:
         report = RunReport(
             [ActionResult("system", "dry_run", ActionStatus.SKIPPED, "dry-run 未访问网络")]
         )
         _write_summary(report, args.summary)
         _print_report(report)
+        log_step("application", status="completed", exit_code=0, result_count=1)
         return 0
 
     try:
         config = AppConfig.from_env()
     except ConfigurationError as exc:
+        log_step(
+            "configuration",
+            status="failed",
+            exception_type=type(exc).__name__,
+        )
         report = RunReport(
             [
                 ActionResult(
@@ -76,12 +84,42 @@ def run(argv: list[str] | None = None) -> int:
         )
         _write_summary(report, args.summary or _environment_summary_path())
         _print_report(report)
+        log_step(
+            "application",
+            status="completed",
+            exit_code=report.exit_code,
+            result_count=len(report.results),
+        )
         return report.exit_code
+
+    enabled_sites = [
+        name
+        for name, enabled in (
+            ("klpbbs", config.klpbbs.enabled),
+            ("minebbs", config.minebbs.enabled),
+            ("wdsjfwq", config.wdsjfwq.enabled),
+            ("mclists", config.mclists.enabled),
+        )
+        if enabled
+    ]
+    log_step(
+        "configuration",
+        status="completed",
+        enabled_sites=enabled_sites,
+        adapter_count=len(enabled_sites),
+    )
 
     state_path = args.state or config.state_path
     summary_path = args.summary or config.summary_path
     store = StateStore(state_path)
+    log_step("state_load", status="started", state_exists=state_path.exists())
     state = store.load()
+    log_step(
+        "state_load",
+        status="completed",
+        state_exists=state_path.exists(),
+        recovered=state.recovered,
+    )
     adapters: list[SiteAdapter | OneShotAdapter] = []
     secrets: list[str] = []
     ai_solver = OpenAICompatibleVisionSolver(config.ai_solver) if config.ai_solver.enabled else None
@@ -95,12 +133,14 @@ def run(argv: list[str] | None = None) -> int:
 
     def transport(
         *,
+        site: str,
         use_cloudscraper: bool = False,
         challenge_resolver: ChallengeResolver | None = None,
     ) -> HttpTransport:
         return HttpTransport(
             session=create_cloudscraper_session() if use_cloudscraper else None,
             challenge_resolver=challenge_resolver,
+            site=site,
         )
 
     if config.klpbbs.enabled:
@@ -114,7 +154,7 @@ def run(argv: list[str] | None = None) -> int:
         adapters.append(
             KLPBBSAdapter(
                 config.klpbbs,
-                transport(use_cloudscraper=True),
+                transport(site="klpbbs", use_cloudscraper=True),
                 base_url=config.klpbbs.base_url,
                 promotion_visitor=promotion_visitor,
             )
@@ -124,7 +164,7 @@ def run(argv: list[str] | None = None) -> int:
         adapters.append(
             MineBBSAdapter(
                 config.minebbs,
-                transport(challenge_resolver=esa_challenge_resolver),
+                transport(site="minebbs", challenge_resolver=esa_challenge_resolver),
                 base_url=config.minebbs.base_url,
             )
         )
@@ -133,7 +173,7 @@ def run(argv: list[str] | None = None) -> int:
         adapters.append(
             LikeAdapter(
                 config.wdsjfwq,
-                transport(),
+                transport(site="wdsjfwq"),
                 captcha_solver=(
                     ai_solver
                     if ai_solver is not None and config.ai_solver.wdsjfwq_captcha_enabled
@@ -142,7 +182,7 @@ def run(argv: list[str] | None = None) -> int:
             )
         )
     if config.mclists.enabled:
-        adapters.append(LikeAdapter(config.mclists, transport()))
+        adapters.append(LikeAdapter(config.mclists, transport(site="mclists")))
     if config.ai_solver.enabled:
         secrets.extend([config.ai_solver.api_key, config.ai_solver.endpoint])
     if not adapters:
@@ -151,7 +191,15 @@ def run(argv: list[str] | None = None) -> int:
         )
         _write_summary(report, summary_path)
         _print_report(report)
+        log_step(
+            "application",
+            status="completed",
+            exit_code=report.exit_code,
+            result_count=len(report.results),
+        )
         return report.exit_code
+
+    log_step("adapter_setup", status="completed", adapter_count=len(adapters))
 
     report = Orchestrator(
         adapters,
@@ -162,11 +210,21 @@ def run(argv: list[str] | None = None) -> int:
             "minebbs": config.minebbs_bump_interval_hours * 60 * 60,
         },
     ).run()
+    log_step("state_save", status="started", result_count=len(state.sites))
     store.save(state)
+    log_step("state_save", status="completed", result_count=len(state.sites))
+    log_step("summary_write", status="started" if summary_path is not None else "skipped")
     _write_summary(report, summary_path)
+    log_step("summary_write", status="completed" if summary_path is not None else "skipped")
     for result in report.results:
         safe = redact(json.dumps(result.to_dict(), ensure_ascii=False), secrets)
         logging.info(safe)
+    log_step(
+        "application",
+        status="completed",
+        exit_code=report.exit_code,
+        result_count=len(report.results),
+    )
     return report.exit_code
 
 

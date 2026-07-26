@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
+
+from .step_log import log_step
 
 WDSJFWQ_CAPTCHA_PROMPT = """Read the verification code in this WDSJFWQ captcha image.
 
@@ -97,7 +100,23 @@ class OpenAICompatibleVisionSolver:
         code = str(payload.get("code", "")).strip()
         confidence = self._confidence(payload.get("confidence"))
         if not code:
+            log_step(
+                "captcha_solution",
+                site="wdsjfwq",
+                status="failed",
+                confidence=confidence,
+                code_length=0,
+                format_valid=False,
+            )
             raise AISolverError("AI solver returned an empty captcha code")
+        log_step(
+            "captcha_solution",
+            site="wdsjfwq",
+            status="completed",
+            confidence=confidence,
+            code_length=len(code),
+            format_valid=code.isalnum(),
+        )
         return CaptchaSolution(code=code, confidence=confidence)
 
     def _request_json(
@@ -128,7 +147,18 @@ class OpenAICompatibleVisionSolver:
             "Content-Type": "application/json",
         }
         last_error: Exception | None = None
-        for _attempt in range(self.config.max_attempts):
+        for attempt in range(1, self.config.max_attempts + 1):
+            started = time.monotonic()
+            log_step(
+                "ai_request",
+                site="wdsjfwq",
+                status="started",
+                model=self.config.model,
+                image_bytes=len(image),
+                content_type=content_type,
+                max_attempts=self.config.max_attempts,
+                action=attempt,
+            )
             try:
                 response = self.client.post(
                     self.chat_url,
@@ -136,10 +166,34 @@ class OpenAICompatibleVisionSolver:
                     json=request_body,
                     timeout=self.config.timeout_seconds,
                 )
+                log_step(
+                    "ai_response",
+                    site="wdsjfwq",
+                    status="received",
+                    status_code=response.status_code,
+                    elapsed_ms=round((time.monotonic() - started) * 1000),
+                    action=attempt,
+                )
                 response.raise_for_status()
-                return self._parse_chat_content(response.json())
+                parsed = self._parse_chat_content(response.json())
+                log_step(
+                    "ai_response_parse",
+                    site="wdsjfwq",
+                    status="completed",
+                    elapsed_ms=round((time.monotonic() - started) * 1000),
+                    action=attempt,
+                )
+                return parsed
             except (requests.RequestException, AISolverError, ValueError, TypeError) as exc:
                 last_error = exc
+                log_step(
+                    "ai_request",
+                    site="wdsjfwq",
+                    status="failed",
+                    elapsed_ms=round((time.monotonic() - started) * 1000),
+                    exception_type=type(exc).__name__,
+                    action=attempt,
+                )
         raise AISolverError("AI solver request failed") from last_error
 
     @staticmethod

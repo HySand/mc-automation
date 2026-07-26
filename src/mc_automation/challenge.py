@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 import requests
 
 from .security import detect_security_challenge
+from .step_log import log_step
 
 
 class EsaSliderChallengeResolver:
@@ -56,6 +57,14 @@ class EsaSliderChallengeResolver:
     ) -> bool:
         """Run the one-shot async browser attempt from the synchronous transport boundary."""
 
+        log_step(
+            "esa_resolution",
+            site="minebbs",
+            status="started",
+            url=url,
+            headless=self.headless,
+        )
+
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -63,18 +72,47 @@ class EsaSliderChallengeResolver:
         else:
             # The HTTP transport is synchronous. Refuse to nest an event loop instead of
             # trying to schedule a second browser attempt in a caller-owned loop.
+            log_step(
+                "esa_event_loop_check",
+                site="minebbs",
+                status="failed",
+                resolved=False,
+            )
             return False
 
         try:
             nodriver = importlib.import_module("nodriver")
         except ImportError:
+            log_step(
+                "esa_nodriver_import",
+                site="minebbs",
+                status="failed",
+                resolved=False,
+            )
             return False
+        log_step("esa_nodriver_import", site="minebbs", status="completed")
 
         try:
-            return asyncio.run(self._resolve_async(nodriver, url, session, timeout))
-        except Exception:
+            resolved = asyncio.run(self._resolve_async(nodriver, url, session, timeout))
+            log_step(
+                "esa_resolution",
+                site="minebbs",
+                status="completed" if resolved else "failed",
+                url=url,
+                resolved=resolved,
+            )
+            return resolved
+        except Exception as exc:
             # Browser availability and protocol errors are deliberately fail-closed. The
             # transport will classify the unresolved challenge as manual intervention.
+            log_step(
+                "esa_resolution",
+                site="minebbs",
+                status="failed",
+                url=url,
+                resolved=False,
+                exception_type=type(exc).__name__,
+            )
             return False
 
     async def _resolve_async(
@@ -98,6 +136,13 @@ class EsaSliderChallengeResolver:
             }
             if self.browser_executable_path:
                 start_kwargs["browser_executable_path"] = self.browser_executable_path
+            log_step(
+                "esa_browser_start",
+                site="minebbs",
+                status="started",
+                headless=self.headless,
+                browser_fallback=False,
+            )
             try:
                 browser = await nodriver.start(**start_kwargs)
             except FileNotFoundError:
@@ -107,16 +152,45 @@ class EsaSliderChallengeResolver:
                 if fallback is None:
                     raise
                 start_kwargs["browser_executable_path"] = fallback
+                log_step(
+                    "esa_browser_start",
+                    site="minebbs",
+                    status="retrying",
+                    headless=self.headless,
+                    browser_fallback=True,
+                )
                 browser = await nodriver.start(**start_kwargs)
+            log_step("esa_browser_start", site="minebbs", status="completed")
 
             request_cookies = self._request_cookies(session, url, nodriver.cdp)
+            log_step(
+                "esa_request_session",
+                site="minebbs",
+                status="completed",
+                cookie_count=len(request_cookies),
+            )
             if request_cookies:
                 await browser.cookies.set_all(request_cookies)
 
             navigation_timeout = max(timeout)
+            log_step(
+                "esa_navigation",
+                site="minebbs",
+                status="started",
+                url=url,
+                navigation_timeout_ms=round(navigation_timeout * 1000),
+            )
             tab = await asyncio.wait_for(browser.get(url), timeout=navigation_timeout)
+            log_step("esa_navigation", site="minebbs", status="completed", url=url)
             await self._settle_tab(tab)
             cleared = await self._page_is_clear(tab)
+            log_step(
+                "esa_challenge_check",
+                site="minebbs",
+                status="completed",
+                already_clear=cleared,
+                resolved=cleared,
+            )
             if not cleared:
                 cleared = await self._drag_slider(
                     tab, nodriver.cdp
@@ -128,33 +202,68 @@ class EsaSliderChallengeResolver:
                 cleanup_ok = await self._close_browser(nodriver, browser, profile_path)
             else:
                 cleanup_ok = await self._remove_managed_profile(profile_path)
+            log_step(
+                "esa_browser_cleanup",
+                site="minebbs",
+                status="completed" if cleanup_ok else "failed",
+                cleanup_ok=cleanup_ok,
+            )
 
         if browser_session is None or not cleanup_ok:
             return False
         cookies, user_agent = browser_session
         self._copy_browser_session(cookies, user_agent, session)
+        log_step(
+            "esa_session_sync",
+            site="minebbs",
+            status="completed",
+            cookie_count=len(cookies),
+            session_synced=True,
+        )
         return True
 
     async def _drag_slider(self, tab: Any, cdp: Any) -> bool:
         try:
             handle = await tab.select(self.HANDLE_SELECTOR, timeout=self.wait_seconds)
             track = await tab.select(self.TRACK_SELECTOR, timeout=self.wait_seconds)
-        except Exception:
+        except Exception as exc:
+            log_step(
+                "esa_dom_geometry",
+                site="minebbs",
+                status="failed",
+                exception_type=type(exc).__name__,
+            )
             return False
         if handle is None or track is None:
+            log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
             return False
 
         try:
             handle_position = await handle.get_position()
             track_position = await track.get_position()
-        except Exception:
+        except Exception as exc:
+            log_step(
+                "esa_dom_geometry",
+                site="minebbs",
+                status="failed",
+                exception_type=type(exc).__name__,
+            )
             return False
         if handle_position is None or track_position is None:
+            log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
             return False
 
         handle_width = float(handle_position.width)
         handle_height = float(handle_position.height)
         track_width = float(track_position.width)
+        log_step(
+            "esa_dom_geometry",
+            site="minebbs",
+            status="completed",
+            handle_width=round(handle_width, 2),
+            handle_height=round(handle_height, 2),
+            track_width=round(track_width, 2),
+        )
         if handle_width <= 0 or handle_height <= 0 or track_width <= handle_width:
             return False
 
@@ -166,6 +275,14 @@ class EsaSliderChallengeResolver:
 
         drag_path = self._humanized_drag_path(start_x, start_y, end_x)
         drag_deadlines = self._humanized_drag_deadlines(len(drag_path))
+        log_step(
+            "esa_drag",
+            site="minebbs",
+            status="started",
+            path_points=len(drag_path),
+            duration_ms=self.drag_duration_ms,
+            distance=round(end_x - start_x, 2),
+        )
         await self._dispatch_mouse_event(
             tab,
             cdp,
@@ -220,6 +337,14 @@ class EsaSliderChallengeResolver:
                 buttons=0,
                 click_count=1,
             )
+        log_step(
+            "esa_drag",
+            site="minebbs",
+            status="completed",
+            path_points=len(drag_path),
+            duration_ms=self.drag_duration_ms,
+            distance=round(end_x - start_x, 2),
+        )
         return True
 
     async def _dispatch_mouse_event(

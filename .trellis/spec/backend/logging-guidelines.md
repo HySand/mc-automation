@@ -1,51 +1,41 @@
 # Logging Guidelines
 
-> How logging is done in this project.
+## Format and API
 
----
+- Operational steps use Python `logging` through `mc_automation.step_log.log_step` and logger
+  `mc_automation.steps`.
+- Every step is one compact JSONL record with `event`, UTC `timestamp`, `site`, `phase`, `status`,
+  and `metadata`. Keep phase names stable, lowercase, and action-oriented.
+- Use `started`, `completed`, `observed`, `skipped`, `detected`, `retrying`, or `failed` status values.
+- Metadata is a closed allowlist in `step_log.py`. New metadata keys require a security review and
+  tests before being accepted. Rejected keys appear only as `[REDACTED]` placeholders.
 
-## Overview
+## Required Coverage
 
-<!--
-Document your project's logging conventions here.
+- CLI: application start/end, configuration result, enabled site names, state load/save, adapter
+  setup, summary write, result count, and exit code.
+- Orchestrator: per-site start/end, suspension, authentication, sign-in, promotion, rank,
+  ownership, recovery/cooldown, inventory count, purchase/apply start, action result, and exception
+  type.
+- HTTP: method, sanitized URL, response status, content type/length, duration, redirect count and
+  sanitized target, challenge classification/resolution, and bounded network failure type.
+- WDSJFWQ: page/control/form discovery, initial/response/refreshed public count, captcha image byte
+  count/type, model attempt/status/duration, confidence/code length/shape validity, form field names,
+  response classification, and final result.
+- ESA: nodriver import, browser start/fallback, cookie counts, navigation, challenge check, DOM
+  dimensions, drag distance/point count/duration, cleanup, session sync, and final result.
 
-Questions to answer:
-- What logging library do you use?
-- What are the log levels and when to use each?
-- What should be logged?
-- What should NOT be logged (PII, secrets)?
--->
+## Sensitive-data Contract
 
-(To be filled by the team)
+- Never log usernames, passwords, cookies, tokens, CSRF values, authorization headers, captcha
+  text, image bytes/Base64, AI endpoint/key, form values, request/response bodies, raw model output,
+  browser profile paths, or exception messages.
+- HTTP URLs are normalized to `scheme://host[:port]/path`; userinfo, query, and fragment are removed.
+- Field names and aggregate sizes/counts are allowed; field values are not.
+- "Complete step logging" means full control-flow observability, not raw traffic dumps.
 
----
+## Tests
 
-## Log Levels
-
-<!-- When to use each level: debug, info, warn, error -->
-
-(To be filled by the team)
-
----
-
-## Structured Logging
-
-<!-- Log format, required fields -->
-
-(To be filled by the team)
-
----
-
-## What to Log
-
-<!-- Important events to log -->
-
-(To be filled by the team)
-
----
-
-## What NOT to Log
-
-<!-- Sensitive data, PII, secrets -->
-
-(To be filled by the team)
+- Use `caplog` against `mc_automation.steps`, decode every record as JSON, assert expected phases,
+  and assert known sentinel secrets never occur.
+- Every new request/form/model/browser path needs both presence checks and negative redaction checks.

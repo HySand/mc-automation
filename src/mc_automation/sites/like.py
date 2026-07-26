@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup, Tag
 from ..ai_solver import AISolverError, CaptchaSolution
 from ..config import LikeSiteConfig
 from ..models import ActionResult, ActionStatus
+from ..step_log import log_step
 from ..transport import HttpTransport
 from .base import SiteParseError
 
@@ -49,6 +50,13 @@ class LikeAdapter:
         self.username_factory = username_factory or self._random_username
 
     def _result(self, status: ActionStatus, message: str) -> ActionResult:
+        log_step(
+            "site_action",
+            site=self.name,
+            status="completed",
+            action="like",
+            result_status=status.value,
+        )
         return ActionResult(self.name, "like", status, message)
 
     @staticmethod
@@ -180,28 +188,78 @@ class LikeAdapter:
 
     def _submit_form(self, form: Tag, data: dict[str, str]) -> requests.Response:
         action = self._url(str(form.get("action", self.url)))
-        if str(form.get("method", "get")).casefold() == "post":
+        method = str(form.get("method", "get")).upper()
+        log_step(
+            "form_submission",
+            site=self.name,
+            status="started",
+            url=action,
+            submit_method=method,
+            field_names=sorted(data),
+            field_count=len(data),
+        )
+        if method == "POST":
             return self.transport.post(action, data=data)
         return self.transport.get(action, params=data)
 
     def _solve_wdsjfwq_form(self, soup: BeautifulSoup, form: Tag) -> requests.Response | None:
         if self.name != "wdsjfwq" or self.captcha_solver is None:
+            log_step(
+                "captcha_solver_availability",
+                site=self.name,
+                status="skipped",
+                resolved=False,
+            )
             return None
         username_field = self._find_input(form, ("username", "user", "玩家", "昵称"))
         captcha_field = self._find_input(form, ("captcha", "verification", "verify", "验证码"))
         captcha_url = self._captcha_image_url(soup, form)
+        log_step(
+            "captcha_form_inspection",
+            site=self.name,
+            status="completed",
+            field_count=len(form.select("input[name]")),
+            resolved=username_field is not None
+            and captcha_field is not None
+            and captcha_url is not None,
+        )
         if username_field is None or captcha_field is None or captcha_url is None:
             return None
+        log_step("captcha_image", site=self.name, status="started", url=captcha_url)
         captcha_image = self.transport.get(captcha_url)
+        log_step(
+            "captcha_image",
+            site=self.name,
+            status="completed",
+            url=captcha_url,
+            image_bytes=len(captcha_image.content),
+            content_type=captcha_image.headers.get("Content-Type", "image/png").split(";", 1)[0],
+        )
+        log_step("captcha_recognition", site=self.name, status="started")
         try:
             solution = self.captcha_solver.solve_wdsjfwq_captcha(
                 captcha_image.content,
                 content_type=captcha_image.headers.get("Content-Type", "image/png"),
             )
-        except (AISolverError, AttributeError):
+        except (AISolverError, AttributeError) as exc:
+            log_step(
+                "captcha_recognition",
+                site=self.name,
+                status="failed",
+                exception_type=type(exc).__name__,
+            )
             return None
         code = solution.code.strip()
-        if not CAPTCHA_CODE_PATTERN.fullmatch(code):
+        format_valid = CAPTCHA_CODE_PATTERN.fullmatch(code) is not None
+        log_step(
+            "captcha_recognition",
+            site=self.name,
+            status="completed" if format_valid else "failed",
+            confidence=solution.confidence,
+            code_length=len(code),
+            format_valid=format_valid,
+        )
+        if not format_valid:
             return None
         data = self._input_data(form)
         data[str(username_field["name"])] = self.username_factory()
@@ -209,11 +267,21 @@ class LikeAdapter:
         return self._submit_form(form, data)
 
     def run_one_shot_action(self) -> ActionResult:
+        log_step("site_action", site=self.name, status="started", action="like", url=self.url)
+        log_step("page_fetch", site=self.name, status="started", url=self.url)
         page = self.transport.get(self.url)
+        log_step("page_fetch", site=self.name, status="completed", url=self.url)
         text = BeautifulSoup(page.text, "html.parser").get_text(" ", strip=True)
         initial_wdsjfwq_count = (
             self._wdsjfwq_like_count(page.text) if self.name == "wdsjfwq" else None
         )
+        if self.name == "wdsjfwq":
+            log_step(
+                "like_count",
+                site=self.name,
+                status="observed",
+                initial_count=initial_wdsjfwq_count,
+            )
         if any(marker.casefold() in text.casefold() for marker in ALREADY_LIKED):
             return self._result(ActionStatus.SKIPPED, "页面显示本轮已喜欢")
 
@@ -235,21 +303,60 @@ class LikeAdapter:
             )
         ]
         mclists_button = self._mclists_button(soup)
-        if len(links) + len(forms) + int(mclists_button is not None) != 1:
+        control_count = len(links) + len(forms) + int(mclists_button is not None)
+        control_kind = (
+            "mclists_button" if mclists_button is not None else "link" if links else "form"
+        )
+        log_step(
+            "like_control_discovery",
+            site=self.name,
+            status="completed" if control_count == 1 else "failed",
+            link_count=len(links),
+            form_count=len(forms),
+            control_count=control_count,
+            control_kind=control_kind if control_count == 1 else "ambiguous",
+        )
+        if control_count != 1:
             raise SiteParseError("喜欢控件缺失或不唯一，未提交请求")
 
         if mclists_button is not None:
             action, server_id = mclists_button
+            log_step(
+                "like_submission",
+                site=self.name,
+                status="started",
+                url=action,
+                submit_method="POST",
+                field_names=["sid"],
+                field_count=1,
+            )
             response = self.transport.post(
                 action,
                 data={"sid": server_id},
                 headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
             )
         elif links:
-            response = self.transport.get(self._url(str(links[0]["href"])))
+            action = self._url(str(links[0]["href"]))
+            log_step(
+                "like_submission",
+                site=self.name,
+                status="started",
+                url=action,
+                submit_method="GET",
+                field_count=0,
+            )
+            response = self.transport.get(action)
         else:
             form = forms[0]
-            if self._requires_interaction(form):
+            requires_interaction = self._requires_interaction(form)
+            log_step(
+                "form_inspection",
+                site=self.name,
+                status="completed",
+                requires_interaction=requires_interaction,
+                field_count=len(form.select("input[name]")),
+            )
+            if requires_interaction:
                 solved_response = self._solve_wdsjfwq_form(soup, form)
                 if solved_response is None:
                     return self._result(
@@ -261,16 +368,46 @@ class LikeAdapter:
                 response = self._submit_form(form, self._input_data(form))
 
         response_text = BeautifulSoup(response.text, "html.parser").get_text(" ", strip=True)
+        try:
+            json_response = isinstance(json.loads(response.text), dict)
+        except (json.JSONDecodeError, TypeError):
+            json_response = False
+        success_marker = any(
+            marker.casefold() in response_text.casefold() for marker in SUCCESS_MARKERS
+        )
+        log_step(
+            "like_response_classification",
+            site=self.name,
+            status="completed",
+            json_response=json_response,
+            success_marker=success_marker,
+            content_length=len(response.content),
+            content_type=response.headers.get("Content-Type", "").split(";", 1)[0],
+        )
         if json_result := self._json_result(response.text):
             return json_result
-        if any(marker.casefold() in response_text.casefold() for marker in SUCCESS_MARKERS):
+        if success_marker:
             return self._result(ActionStatus.SUCCESS, "喜欢操作完成")
         if initial_wdsjfwq_count is not None:
             response_count = self._wdsjfwq_like_count(response.text)
+            log_step(
+                "like_count",
+                site=self.name,
+                status="observed",
+                initial_count=initial_wdsjfwq_count,
+                response_count=response_count,
+            )
             if response_count is not None and response_count > initial_wdsjfwq_count:
                 return self._result(ActionStatus.SUCCESS, "点赞计数已增加，喜欢操作完成")
             refreshed = self.transport.get(self.url)
             refreshed_count = self._wdsjfwq_like_count(refreshed.text)
+            log_step(
+                "like_count_refresh",
+                site=self.name,
+                status="observed",
+                initial_count=initial_wdsjfwq_count,
+                refreshed_count=refreshed_count,
+            )
             if refreshed_count is not None and refreshed_count > initial_wdsjfwq_count:
                 return self._result(ActionStatus.SUCCESS, "点赞计数已增加，喜欢操作完成")
         return self._result(ActionStatus.TECHNICAL_FAILURE, "喜欢操作结果无法确认")

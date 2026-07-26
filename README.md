@@ -83,3 +83,5 @@ WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只�
 ## 安全与故障处理
 
 适配器遇到未知 HTML、所有权不匹配、余额/库存/CSRF 不明确或站点拒绝时，不执行购买、使用或顶贴副作用。运行结果写入 Actions 日志和 Job Summary，但不会包含凭据、Cookie、响应正文或扩展密钥。
+
+运行时还会输出逐步 JSONL 日志，覆盖配置、状态、各站点动作、HTTP、WDSJFWQ 验证码图片下载/AI 识别/表单提交/计数确认，以及 MineBBS ESA 浏览器/DOM/拖动/清理流程。URL 仅保留 scheme、host、port 和 path；日志只记录字段名、状态、数量及耗时，不记录表单值、验证码文本、图片 Base64、AI endpoint/key 或原始响应正文。

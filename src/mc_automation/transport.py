@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Protocol, cast
 
 import cloudscraper  # type: ignore[import-untyped]
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+from .step_log import log_step
 
 
 class TransportError(RuntimeError):
@@ -40,10 +43,12 @@ class HttpTransport:
         session: requests.Session | None = None,
         timeout: tuple[float, float] = (10.0, 20.0),
         challenge_resolver: ChallengeResolver | None = None,
+        site: str = "system",
     ) -> None:
         self.session = session or requests.Session()
         self.timeout = timeout
         self.challenge_resolver = challenge_resolver
+        self.site = site
         from .cf_waf import CloudflareWafGuard
 
         self.cf_waf_guard = CloudflareWafGuard(challenge_resolver)
@@ -79,22 +84,79 @@ class HttpTransport:
         current_method = method.upper()
         challenge_attempted = False
         while True:
+            started = time.monotonic()
+            log_step(
+                "http_request",
+                site=self.site,
+                status="started",
+                method=current_method,
+                url=url,
+            )
             try:
                 response = self.session.request(current_method, url, **kwargs)
             except (requests.ConnectionError, requests.Timeout) as exc:
+                log_step(
+                    "http_request",
+                    site=self.site,
+                    status="failed",
+                    method=current_method,
+                    url=url,
+                    elapsed_ms=round((time.monotonic() - started) * 1000),
+                    exception_type=type(exc).__name__,
+                )
                 raise TransportError("network request failed after bounded retries") from exc
+
+            log_step(
+                "http_response",
+                site=self.site,
+                status="completed",
+                method=current_method,
+                url=url,
+                status_code=response.status_code,
+                content_type=response.headers.get("Content-Type", "").split(";", 1)[0],
+                content_length=len(response.content),
+                elapsed_ms=round((time.monotonic() - started) * 1000),
+                redirect_count=len(response.history),
+                redirect_target=response.url,
+            )
 
             info = self.cf_waf_guard.inspect(response)
             if info is not None:
+                log_step(
+                    "security_challenge",
+                    site=self.site,
+                    status="detected",
+                    method=current_method,
+                    url=url,
+                    challenge_kind=info.kind.value,
+                )
                 if not challenge_attempted:
                     challenge_attempted = True
-                    if self.cf_waf_guard.resolve_once(
+                    log_step(
+                        "challenge_resolution",
+                        site=self.site,
+                        status="started",
+                        method=current_method,
+                        url=url,
+                        challenge_kind=info.kind.value,
+                    )
+                    resolved = self.cf_waf_guard.resolve_once(
                         info=info,
                         method=current_method,
                         url=url,
                         session=self.session,
                         timeout=self.timeout,
-                    ):
+                    )
+                    log_step(
+                        "challenge_resolution",
+                        site=self.site,
+                        status="completed" if resolved else "failed",
+                        method=current_method,
+                        url=url,
+                        challenge_kind=info.kind.value,
+                        resolved=resolved,
+                    )
+                    if resolved:
                         continue
                 raise self.cf_waf_guard.failure(info)
             return response

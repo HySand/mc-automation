@@ -327,6 +327,12 @@ deadline. Credentials, cookies, CSRF tokens, response bodies, API keys, and exte
 written to state, summaries, or ordinary logs. Unknown rank, owner, balance, inventory, form, CSRF
 token, or target option raises `SiteParseError` before a side effect.
 
+All execution paths emit JSONL step logs through the closed metadata allowlist in `step_log.py`.
+HTTP URLs retain only scheme, host, port, and path. WDSJFWQ logs image size, model attempt status,
+confidence, code length, field names, and public count changes without image/code/form values. ESA
+logs browser lifecycle, DOM dimensions, drag point count/duration, clearance, and cookie counts
+without cookie values, browser profile paths, or page bodies.
+
 ## Validation matrix
 
 | Condition | Required behavior |

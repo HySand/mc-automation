@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -10,6 +11,7 @@ from mc_automation.config import LikeSiteConfig
 from mc_automation.models import ActionStatus
 from mc_automation.sites.base import SiteParseError
 from mc_automation.sites.like import LikeAdapter
+from mc_automation.step_log import LOGGER_NAME
 
 
 @dataclass
@@ -219,6 +221,48 @@ def test_wdsjfwq_adapter_solves_captcha_and_submits_random_username() -> None:
             }
         },
     )
+
+
+def test_wdsjfwq_logs_captcha_pipeline_without_values(
+    caplog: object,
+) -> None:
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
+    page = "https://example.test/server-1991/vote.html?private=1"
+    captcha = "https://example.test/captcha.png?nonce=secret"
+    site, _transport = adapter(
+        {
+            page: (
+                '<form action="/server-1991/vote.html" method="post">'
+                '<input type="text" name="username">'
+                '<input type="text" name="captcha">'
+                f'<img src="{captcha}" alt="captcha">'
+                '<button type="submit">like</button></form>'
+            ),
+            captcha: StubResponse("", content=b"captcha-bytes"),
+        },
+        ["success"],
+        name="wdsjfwq",
+        url=page,
+        captcha_solver=FakeCaptchaSolver("Z9K2"),
+    )
+
+    assert site.run_one_shot_action().status is ActionStatus.SUCCESS
+
+    output = "\n".join(record.message for record in caplog.records)  # type: ignore[attr-defined]
+    for phase in (
+        "captcha_form_inspection",
+        "captcha_image",
+        "captcha_recognition",
+        "form_submission",
+        "like_response_classification",
+    ):
+        assert phase in output
+    assert '"image_bytes":13' in output
+    assert '"code_length":4' in output
+    assert "captcha-bytes" not in output
+    assert "Z9K2" not in output
+    assert "Player123456" not in output
+    assert "nonce=secret" not in output
 
 
 def test_wdsjfwq_confirms_an_opaque_response_by_like_count_increment() -> None:

@@ -218,6 +218,15 @@ python -m pytest --cov=mc_automation --cov-report=term-missing
   verify request and returned `Success=true`, `VerifyResult=false`; do not integrate this known-failing
   input route into the production resolver or continue tuning numeric path parameters.
 
+## 14. Complete redacted step logging
+
+- [x] Add a single JSONL step logger with a closed metadata allowlist and URL sanitization.
+- [x] Instrument CLI, orchestration, HTTP, WDSJFWQ captcha/model/form/count confirmation, and ESA
+  browser/DOM/drag/session lifecycle.
+- [x] Add regression tests proving complete phase visibility without credentials, captcha text,
+  image bytes/Base64, form values, URL query values, or raw bodies.
+- [x] Document the logging contract and required negative tests.
+
 Validation:
 
 ```powershell
