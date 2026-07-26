@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mc-automation"
+version = "0.1.0"
+description = "Rule-aware Minecraft server promotion bump automation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12,<5",
+    "cloudscraper>=1.2.71",
+    "python-dotenv>=1.1,<2",
+    "requests>=2.32,<3",
+    "tzdata>=2025.2",
+]
+
+[project.optional-dependencies]
+browser = [
+    "nodriver>=0.50.3,<0.51",
+]
+dev = [
+    "mypy>=1.16,<2",
+    "pytest>=8.4,<9",
+    "pytest-cov>=6.2,<7",
+    "responses>=0.25,<1",
+    "ruff>=0.12,<1",
+    "types-requests>=2.32",
+]
+
+[project.scripts]
+mc-automation = "mc_automation.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".agents", ".codex", ".trellis"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["mc_automation"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

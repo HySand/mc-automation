@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import pytest
+import requests
+import responses
+from requests.adapters import HTTPAdapter
+
+from mc_automation.transport import HttpTransport, SecurityChallenge, create_cloudscraper_session
+
+
+class FakeChallengeResolver:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def resolve(
+        self,
+        url: str,
+        session: requests.Session,
+        timeout: tuple[float, float],
+    ) -> bool:
+        self.calls += 1
+        session.cookies.set("clearance", "ok")
+        return True
+
+
+@responses.activate
+def test_transport_rejects_challenge_before_parser_sees_it() -> None:
+    responses.get("https://example.test/", body="aliyunCaptcha", status=200)
+    with pytest.raises(SecurityChallenge):
+        HttpTransport(session=requests.Session()).get("https://example.test/")
+
+
+@responses.activate
+def test_transport_returns_normal_page() -> None:
+    responses.get("https://example.test/", body="ok", status=200)
+    assert HttpTransport(session=requests.Session()).get("https://example.test/").text == "ok"
+
+
+def test_cloudscraper_session_is_usable_by_transport() -> None:
+    session = create_cloudscraper_session()
+    user_agent = session.headers["User-Agent"]
+    adapter = session.get_adapter("https://")
+
+    transport = HttpTransport(session=session)
+
+    assert transport.session.headers["User-Agent"] == user_agent
+    assert type(transport.session.get_adapter("https://")) is type(adapter)
+    assert transport.session.get_adapter("https://").max_retries.total == 2
+    assert type(adapter) is not HTTPAdapter
+
+
+@responses.activate
+def test_challenge_resolver_retries_get_once() -> None:
+    responses.get("https://example.test/", body="cf-chl-test", status=403)
+    responses.get("https://example.test/", body="ok", status=200)
+    resolver = FakeChallengeResolver()
+    response = HttpTransport(session=requests.Session(), challenge_resolver=resolver).get(
+        "https://example.test/"
+    )
+    assert response.text == "ok"
+    assert resolver.calls == 1
+
+
+@responses.activate
+def test_post_challenge_is_never_replayed() -> None:
+    responses.post("https://example.test/action", body="cf-chl-test", status=403)
+    resolver = FakeChallengeResolver()
+    with pytest.raises(SecurityChallenge):
+        HttpTransport(session=requests.Session(), challenge_resolver=resolver).post(
+            "https://example.test/action"
+        )
+    assert resolver.calls == 0

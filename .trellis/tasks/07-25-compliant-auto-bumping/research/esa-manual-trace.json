@@ -1,0 +1,2867 @@
+{
+  "status": "cleared",
+  "trace": [
+    {
+      "type": "mousemove",
+      "dx": 0,
+      "dy": 0,
+      "dt_ms": 0,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -2,
+      "dy": -4,
+      "dt_ms": 4,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -3,
+      "dy": -8,
+      "dt_ms": 8,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -4,
+      "dy": -12,
+      "dt_ms": 12,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -6,
+      "dy": -16,
+      "dt_ms": 16,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -6,
+      "dy": -21,
+      "dt_ms": 20,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -7,
+      "dy": -25,
+      "dt_ms": 25,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -10,
+      "dy": -32,
+      "dt_ms": 29,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -10,
+      "dy": -36,
+      "dt_ms": 33,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -10,
+      "dy": -40,
+      "dt_ms": 37,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -11,
+      "dy": -45,
+      "dt_ms": 41,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -12,
+      "dy": -51,
+      "dt_ms": 45,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -12,
+      "dy": -56,
+      "dt_ms": 49,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -14,
+      "dy": -61,
+      "dt_ms": 54,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -14,
+      "dy": -67,
+      "dt_ms": 58,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -14,
+      "dy": -71,
+      "dt_ms": 62,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -15,
+      "dy": -76,
+      "dt_ms": 66,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -15,
+      "dy": -80,
+      "dt_ms": 70,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -16,
+      "dy": -84,
+      "dt_ms": 74,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -18,
+      "dy": -88,
+      "dt_ms": 79,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -18,
+      "dy": -92,
+      "dt_ms": 83,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 140,
+      "dy": 246,
+      "dt_ms": 10202,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 134,
+      "dy": 247,
+      "dt_ms": 10206,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 130,
+      "dy": 249,
+      "dt_ms": 10210,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 126,
+      "dy": 251,
+      "dt_ms": 10214,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 122,
+      "dy": 252,
+      "dt_ms": 10218,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 118,
+      "dy": 254,
+      "dt_ms": 10222,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 114,
+      "dy": 255,
+      "dt_ms": 10227,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 112,
+      "dy": 256,
+      "dt_ms": 10231,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 108,
+      "dy": 258,
+      "dt_ms": 10235,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 105,
+      "dy": 259,
+      "dt_ms": 10239,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 102,
+      "dy": 260,
+      "dt_ms": 10243,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 100,
+      "dy": 261,
+      "dt_ms": 10247,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 98,
+      "dy": 262,
+      "dt_ms": 10252,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 94,
+      "dy": 263,
+      "dt_ms": 10256,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 93,
+      "dy": 263,
+      "dt_ms": 10260,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 90,
+      "dy": 264,
+      "dt_ms": 10264,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 89,
+      "dy": 264,
+      "dt_ms": 10268,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 86,
+      "dy": 265,
+      "dt_ms": 10273,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 85,
+      "dy": 266,
+      "dt_ms": 10277,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 82,
+      "dy": 266,
+      "dt_ms": 10281,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 81,
+      "dy": 266,
+      "dt_ms": 10285,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 78,
+      "dy": 267,
+      "dt_ms": 10289,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 76,
+      "dy": 267,
+      "dt_ms": 10293,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 74,
+      "dy": 268,
+      "dt_ms": 10297,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 70,
+      "dy": 268,
+      "dt_ms": 10302,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 68,
+      "dy": 269,
+      "dt_ms": 10306,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 65,
+      "dy": 269,
+      "dt_ms": 10310,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 62,
+      "dy": 270,
+      "dt_ms": 10314,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 58,
+      "dy": 270,
+      "dt_ms": 10318,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 54,
+      "dy": 271,
+      "dt_ms": 10322,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 52,
+      "dy": 271,
+      "dt_ms": 10327,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 49,
+      "dy": 272,
+      "dt_ms": 10331,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 46,
+      "dy": 272,
+      "dt_ms": 10335,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 42,
+      "dy": 273,
+      "dt_ms": 10339,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 40,
+      "dy": 273,
+      "dt_ms": 10343,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 37,
+      "dy": 273,
+      "dt_ms": 10347,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 34,
+      "dy": 274,
+      "dt_ms": 10352,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 32,
+      "dy": 274,
+      "dt_ms": 10356,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 29,
+      "dy": 275,
+      "dt_ms": 10360,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 26,
+      "dy": 275,
+      "dt_ms": 10364,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 25,
+      "dy": 276,
+      "dt_ms": 10368,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 22,
+      "dy": 276,
+      "dt_ms": 10373,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 20,
+      "dy": 276,
+      "dt_ms": 10377,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 17,
+      "dy": 277,
+      "dt_ms": 10381,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 14,
+      "dy": 277,
+      "dt_ms": 10385,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 14,
+      "dy": 278,
+      "dt_ms": 10389,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 10,
+      "dy": 278,
+      "dt_ms": 10393,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 9,
+      "dy": 278,
+      "dt_ms": 10398,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 6,
+      "dy": 279,
+      "dt_ms": 10402,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 4,
+      "dy": 279,
+      "dt_ms": 10406,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 2,
+      "dy": 279,
+      "dt_ms": 10410,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 0,
+      "dy": 279,
+      "dt_ms": 10414,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -3,
+      "dy": 279,
+      "dt_ms": 10418,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -6,
+      "dy": 280,
+      "dt_ms": 10423,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -8,
+      "dy": 280,
+      "dt_ms": 10427,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -10,
+      "dy": 280,
+      "dt_ms": 10431,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -14,
+      "dy": 280,
+      "dt_ms": 10435,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -15,
+      "dy": 280,
+      "dt_ms": 10439,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -18,
+      "dy": 280,
+      "dt_ms": 10443,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -22,
+      "dy": 280,
+      "dt_ms": 10447,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -24,
+      "dy": 280,
+      "dt_ms": 10452,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -26,
+      "dy": 280,
+      "dt_ms": 10456,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -30,
+      "dy": 280,
+      "dt_ms": 10460,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -31,
+      "dy": 280,
+      "dt_ms": 10464,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -34,
+      "dy": 280,
+      "dt_ms": 10468,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -38,
+      "dy": 281,
+      "dt_ms": 10473,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -39,
+      "dy": 281,
+      "dt_ms": 10477,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -42,
+      "dy": 281,
+      "dt_ms": 10481,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -44,
+      "dy": 282,
+      "dt_ms": 10485,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -46,
+      "dy": 282,
+      "dt_ms": 10489,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -48,
+      "dy": 282,
+      "dt_ms": 10494,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -50,
+      "dy": 284,
+      "dt_ms": 10498,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -54,
+      "dy": 286,
+      "dt_ms": 10502,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -55,
+      "dy": 287,
+      "dt_ms": 10506,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -58,
+      "dy": 288,
+      "dt_ms": 10510,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -59,
+      "dy": 289,
+      "dt_ms": 10514,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -60,
+      "dy": 289,
+      "dt_ms": 10518,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -62,
+      "dy": 290,
+      "dt_ms": 10522,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -64,
+      "dy": 291,
+      "dt_ms": 10527,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -66,
+      "dy": 292,
+      "dt_ms": 10531,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -67,
+      "dy": 292,
+      "dt_ms": 10535,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -68,
+      "dy": 293,
+      "dt_ms": 10539,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -70,
+      "dy": 294,
+      "dt_ms": 10543,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -71,
+      "dy": 294,
+      "dt_ms": 10547,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -74,
+      "dy": 295,
+      "dt_ms": 10552,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -74,
+      "dy": 296,
+      "dt_ms": 10556,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -75,
+      "dy": 296,
+      "dt_ms": 10560,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -78,
+      "dy": 297,
+      "dt_ms": 10564,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -78,
+      "dy": 298,
+      "dt_ms": 10568,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -79,
+      "dy": 298,
+      "dt_ms": 10573,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -82,
+      "dy": 299,
+      "dt_ms": 10577,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -82,
+      "dy": 300,
+      "dt_ms": 10581,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -83,
+      "dy": 300,
+      "dt_ms": 10585,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -84,
+      "dy": 301,
+      "dt_ms": 10589,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -86,
+      "dy": 302,
+      "dt_ms": 10593,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -86,
+      "dy": 303,
+      "dt_ms": 10598,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -87,
+      "dy": 304,
+      "dt_ms": 10602,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -90,
+      "dy": 305,
+      "dt_ms": 10606,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -91,
+      "dy": 306,
+      "dt_ms": 10614,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -94,
+      "dy": 307,
+      "dt_ms": 10618,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -94,
+      "dy": 308,
+      "dt_ms": 10623,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -95,
+      "dy": 309,
+      "dt_ms": 10627,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -98,
+      "dy": 310,
+      "dt_ms": 10631,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -98,
+      "dy": 311,
+      "dt_ms": 10635,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -100,
+      "dy": 312,
+      "dt_ms": 10639,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -102,
+      "dy": 313,
+      "dt_ms": 10643,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -103,
+      "dy": 313,
+      "dt_ms": 10648,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -106,
+      "dy": 314,
+      "dt_ms": 10652,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -107,
+      "dy": 315,
+      "dt_ms": 10656,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -110,
+      "dy": 316,
+      "dt_ms": 10660,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -111,
+      "dy": 317,
+      "dt_ms": 10664,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -114,
+      "dy": 317,
+      "dt_ms": 10668,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -116,
+      "dy": 318,
+      "dt_ms": 10673,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -119,
+      "dy": 319,
+      "dt_ms": 10677,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -122,
+      "dy": 320,
+      "dt_ms": 10681,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -123,
+      "dy": 321,
+      "dt_ms": 10685,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -126,
+      "dy": 322,
+      "dt_ms": 10689,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -127,
+      "dy": 322,
+      "dt_ms": 10693,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -131,
+      "dy": 324,
+      "dt_ms": 10698,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -134,
+      "dy": 325,
+      "dt_ms": 10702,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -135,
+      "dy": 325,
+      "dt_ms": 10706,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -138,
+      "dy": 326,
+      "dt_ms": 10710,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -139,
+      "dy": 327,
+      "dt_ms": 10714,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -142,
+      "dy": 327,
+      "dt_ms": 10718,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -143,
+      "dy": 328,
+      "dt_ms": 10723,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -144,
+      "dy": 328,
+      "dt_ms": 10727,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -146,
+      "dy": 328,
+      "dt_ms": 10731,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -146,
+      "dy": 329,
+      "dt_ms": 10735,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -148,
+      "dy": 329,
+      "dt_ms": 10739,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -150,
+      "dy": 330,
+      "dt_ms": 10748,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -151,
+      "dy": 330,
+      "dt_ms": 10756,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -152,
+      "dy": 330,
+      "dt_ms": 10761,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -152,
+      "dy": 331,
+      "dt_ms": 10764,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -154,
+      "dy": 331,
+      "dt_ms": 10768,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -155,
+      "dy": 331,
+      "dt_ms": 10785,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -155,
+      "dy": 332,
+      "dt_ms": 10789,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -156,
+      "dy": 332,
+      "dt_ms": 10793,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -158,
+      "dy": 332,
+      "dt_ms": 10798,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -159,
+      "dy": 333,
+      "dt_ms": 10806,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -162,
+      "dy": 333,
+      "dt_ms": 10810,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -164,
+      "dy": 333,
+      "dt_ms": 10819,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -166,
+      "dy": 333,
+      "dt_ms": 10823,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -168,
+      "dy": 334,
+      "dt_ms": 10827,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -170,
+      "dy": 334,
+      "dt_ms": 10831,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -172,
+      "dy": 334,
+      "dt_ms": 10835,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -174,
+      "dy": 334,
+      "dt_ms": 10839,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -178,
+      "dy": 335,
+      "dt_ms": 10844,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -180,
+      "dy": 335,
+      "dt_ms": 10848,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -182,
+      "dy": 335,
+      "dt_ms": 10852,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -186,
+      "dy": 336,
+      "dt_ms": 10856,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -187,
+      "dy": 336,
+      "dt_ms": 10860,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -190,
+      "dy": 336,
+      "dt_ms": 10864,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -194,
+      "dy": 337,
+      "dt_ms": 10869,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -198,
+      "dy": 337,
+      "dt_ms": 10873,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -202,
+      "dy": 338,
+      "dt_ms": 10877,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -204,
+      "dy": 338,
+      "dt_ms": 10881,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -208,
+      "dy": 338,
+      "dt_ms": 10885,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -211,
+      "dy": 339,
+      "dt_ms": 10889,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -216,
+      "dy": 339,
+      "dt_ms": 10893,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -219,
+      "dy": 339,
+      "dt_ms": 10898,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -222,
+      "dy": 340,
+      "dt_ms": 10902,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -226,
+      "dy": 340,
+      "dt_ms": 10906,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -228,
+      "dy": 340,
+      "dt_ms": 10910,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -231,
+      "dy": 341,
+      "dt_ms": 10914,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -234,
+      "dy": 341,
+      "dt_ms": 10919,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -236,
+      "dy": 342,
+      "dt_ms": 10923,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -238,
+      "dy": 342,
+      "dt_ms": 10927,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -239,
+      "dy": 343,
+      "dt_ms": 10931,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -240,
+      "dy": 343,
+      "dt_ms": 10935,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -242,
+      "dy": 344,
+      "dt_ms": 10939,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -243,
+      "dy": 345,
+      "dt_ms": 10948,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -244,
+      "dy": 345,
+      "dt_ms": 10952,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -246,
+      "dy": 346,
+      "dt_ms": 10960,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -246,
+      "dy": 347,
+      "dt_ms": 10973,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -247,
+      "dy": 347,
+      "dt_ms": 10977,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -248,
+      "dy": 347,
+      "dt_ms": 10981,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -250,
+      "dy": 348,
+      "dt_ms": 10985,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -252,
+      "dy": 348,
+      "dt_ms": 10994,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -254,
+      "dy": 348,
+      "dt_ms": 10998,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -255,
+      "dy": 348,
+      "dt_ms": 11002,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -258,
+      "dy": 348,
+      "dt_ms": 11006,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -259,
+      "dy": 348,
+      "dt_ms": 11010,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -262,
+      "dy": 348,
+      "dt_ms": 11014,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -266,
+      "dy": 348,
+      "dt_ms": 11018,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -267,
+      "dy": 348,
+      "dt_ms": 11023,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -270,
+      "dy": 348,
+      "dt_ms": 11027,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -272,
+      "dy": 348,
+      "dt_ms": 11031,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -275,
+      "dy": 348,
+      "dt_ms": 11035,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -278,
+      "dy": 348,
+      "dt_ms": 11039,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -282,
+      "dy": 348,
+      "dt_ms": 11043,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -283,
+      "dy": 349,
+      "dt_ms": 11048,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -286,
+      "dy": 349,
+      "dt_ms": 11052,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -288,
+      "dy": 349,
+      "dt_ms": 11056,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -290,
+      "dy": 349,
+      "dt_ms": 11060,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -292,
+      "dy": 349,
+      "dt_ms": 11064,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -294,
+      "dy": 350,
+      "dt_ms": 11069,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -298,
+      "dy": 350,
+      "dt_ms": 11073,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -299,
+      "dy": 350,
+      "dt_ms": 11077,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -302,
+      "dy": 350,
+      "dt_ms": 11081,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -303,
+      "dy": 350,
+      "dt_ms": 11085,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -306,
+      "dy": 350,
+      "dt_ms": 11089,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -308,
+      "dy": 351,
+      "dt_ms": 11094,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -310,
+      "dy": 351,
+      "dt_ms": 11098,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -311,
+      "dy": 351,
+      "dt_ms": 11102,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -314,
+      "dy": 351,
+      "dt_ms": 11106,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -315,
+      "dy": 351,
+      "dt_ms": 11110,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -316,
+      "dy": 351,
+      "dt_ms": 11114,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -318,
+      "dy": 351,
+      "dt_ms": 11118,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -319,
+      "dy": 351,
+      "dt_ms": 11123,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -320,
+      "dy": 351,
+      "dt_ms": 11127,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -322,
+      "dy": 351,
+      "dt_ms": 11135,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -323,
+      "dy": 351,
+      "dt_ms": 11252,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -324,
+      "dy": 351,
+      "dt_ms": 11260,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -326,
+      "dy": 351,
+      "dt_ms": 11269,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -327,
+      "dy": 351,
+      "dt_ms": 11281,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -328,
+      "dy": 351,
+      "dt_ms": 11289,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -330,
+      "dy": 351,
+      "dt_ms": 11294,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -331,
+      "dy": 351,
+      "dt_ms": 11302,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -332,
+      "dy": 351,
+      "dt_ms": 11310,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -334,
+      "dy": 351,
+      "dt_ms": 11319,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -335,
+      "dy": 351,
+      "dt_ms": 11335,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -335,
+      "dy": 352,
+      "dt_ms": 11339,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -336,
+      "dy": 352,
+      "dt_ms": 11344,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -338,
+      "dy": 352,
+      "dt_ms": 11348,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -339,
+      "dy": 352,
+      "dt_ms": 11360,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -340,
+      "dy": 352,
+      "dt_ms": 11364,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -342,
+      "dy": 352,
+      "dt_ms": 11369,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -343,
+      "dy": 353,
+      "dt_ms": 11373,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -344,
+      "dy": 353,
+      "dt_ms": 11377,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -346,
+      "dy": 353,
+      "dt_ms": 11381,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -347,
+      "dy": 353,
+      "dt_ms": 11389,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": -348,
+      "dy": 353,
+      "dt_ms": 11398,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousedown",
+      "dx": -348,
+      "dy": 353,
+      "dt_ms": 11566,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -348,
+      "dy": 353,
+      "dt_ms": 11573,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -347,
+      "dy": 353,
+      "dt_ms": 11670,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -346,
+      "dy": 353,
+      "dt_ms": 11674,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -345,
+      "dy": 353,
+      "dt_ms": 11678,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -344,
+      "dy": 353,
+      "dt_ms": 11682,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -343,
+      "dy": 353,
+      "dt_ms": 11685,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -341,
+      "dy": 352,
+      "dt_ms": 11690,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -339,
+      "dy": 352,
+      "dt_ms": 11694,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -337,
+      "dy": 352,
+      "dt_ms": 11698,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -335,
+      "dy": 352,
+      "dt_ms": 11702,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -331,
+      "dy": 352,
+      "dt_ms": 11706,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -326,
+      "dy": 351,
+      "dt_ms": 11710,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -321,
+      "dy": 351,
+      "dt_ms": 11715,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -317,
+      "dy": 351,
+      "dt_ms": 11719,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -314,
+      "dy": 349,
+      "dt_ms": 11723,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -309,
+      "dy": 349,
+      "dt_ms": 11727,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -303,
+      "dy": 348,
+      "dt_ms": 11731,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -298,
+      "dy": 348,
+      "dt_ms": 11735,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -290,
+      "dy": 348,
+      "dt_ms": 11739,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -284,
+      "dy": 348,
+      "dt_ms": 11744,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -277,
+      "dy": 348,
+      "dt_ms": 11748,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -271,
+      "dy": 348,
+      "dt_ms": 11752,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -264,
+      "dy": 347,
+      "dt_ms": 11756,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -255,
+      "dy": 347,
+      "dt_ms": 11760,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -248,
+      "dy": 347,
+      "dt_ms": 11765,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -241,
+      "dy": 347,
+      "dt_ms": 11769,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -235,
+      "dy": 347,
+      "dt_ms": 11773,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -228,
+      "dy": 345,
+      "dt_ms": 11777,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -221,
+      "dy": 345,
+      "dt_ms": 11781,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -214,
+      "dy": 345,
+      "dt_ms": 11785,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -205,
+      "dy": 345,
+      "dt_ms": 11790,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -199,
+      "dy": 345,
+      "dt_ms": 11794,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -193,
+      "dy": 345,
+      "dt_ms": 11798,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -186,
+      "dy": 345,
+      "dt_ms": 11802,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -180,
+      "dy": 345,
+      "dt_ms": 11806,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -174,
+      "dy": 345,
+      "dt_ms": 11810,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -167,
+      "dy": 345,
+      "dt_ms": 11814,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -163,
+      "dy": 345,
+      "dt_ms": 11819,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -156,
+      "dy": 345,
+      "dt_ms": 11823,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -151,
+      "dy": 345,
+      "dt_ms": 11827,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -145,
+      "dy": 345,
+      "dt_ms": 11831,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -138,
+      "dy": 345,
+      "dt_ms": 11835,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -131,
+      "dy": 345,
+      "dt_ms": 11840,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -125,
+      "dy": 345,
+      "dt_ms": 11844,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -119,
+      "dy": 345,
+      "dt_ms": 11848,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -112,
+      "dy": 345,
+      "dt_ms": 11852,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -105,
+      "dy": 345,
+      "dt_ms": 11856,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -97,
+      "dy": 345,
+      "dt_ms": 11860,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -90,
+      "dy": 345,
+      "dt_ms": 11865,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -83,
+      "dy": 345,
+      "dt_ms": 11869,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -75,
+      "dy": 345,
+      "dt_ms": 11873,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -68,
+      "dy": 344,
+      "dt_ms": 11877,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -61,
+      "dy": 344,
+      "dt_ms": 11881,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -53,
+      "dy": 344,
+      "dt_ms": 11885,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -46,
+      "dy": 344,
+      "dt_ms": 11889,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -40,
+      "dy": 344,
+      "dt_ms": 11894,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -33,
+      "dy": 344,
+      "dt_ms": 11898,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -27,
+      "dy": 344,
+      "dt_ms": 11902,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": -22,
+      "dy": 344,
+      "dt_ms": 11906,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": 92,
+      "dy": 344,
+      "dt_ms": 12029,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mousemove",
+      "dx": 93,
+      "dy": 344,
+      "dt_ms": 12031,
+      "trusted": true,
+      "button": 0,
+      "buttons": 1
+    },
+    {
+      "type": "mouseup",
+      "dx": 93,
+      "dy": 344,
+      "dt_ms": 12053,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 93,
+      "dy": 344,
+      "dt_ms": 12061,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    },
+    {
+      "type": "mousemove",
+      "dx": 93,
+      "dy": 345,
+      "dt_ms": 12252,
+      "trusted": true,
+      "button": 0,
+      "buttons": 0
+    }
+  ]
+}

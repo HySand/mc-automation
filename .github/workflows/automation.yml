@@ -1,0 +1,116 @@
+name: Minecraft promotion automation
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mc-promotion-automation
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ${{ vars.AUTOMATION_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    env:
+      KLPBBS_ENABLED: ${{ vars.KLPBBS_ENABLED || 'false' }}
+      KLPBBS_USERNAME: ${{ secrets.KLPBBS_USERNAME }}
+      KLPBBS_PASSWORD: ${{ secrets.KLPBBS_PASSWORD }}
+      KLPBBS_THREAD_ID: ${{ secrets.KLPBBS_THREAD_ID }}
+      KLPBBS_BASE_URL: ${{ vars.KLPBBS_BASE_URL || 'https://klpbbs.com' }}
+      KLPBBS_PROMOTION_ENABLED: ${{ vars.KLPBBS_PROMOTION_ENABLED || 'false' }}
+      KLPBBS_PROMOTION_MAX_VISITS: ${{ vars.KLPBBS_PROMOTION_MAX_VISITS || '10' }}
+      KLPBBS_PROMOTION_VISIT_DELAY_SECONDS: ${{ vars.KLPBBS_PROMOTION_VISIT_DELAY_SECONDS || '2' }}
+      KLPBBS_PROMOTION_PROXY_TARGET_URL: ${{ vars.KLPBBS_PROMOTION_PROXY_TARGET_URL }}
+      KLPBBS_PROMOTION_TARGET_MARKER: ${{ vars.KLPBBS_PROMOTION_TARGET_MARKER }}
+      MINEBBS_ENABLED: ${{ vars.MINEBBS_ENABLED || 'false' }}
+      MINEBBS_USERNAME: ${{ secrets.MINEBBS_USERNAME }}
+      MINEBBS_PASSWORD: ${{ secrets.MINEBBS_PASSWORD }}
+      MINEBBS_THREAD_ID: ${{ secrets.MINEBBS_THREAD_ID }}
+      MINEBBS_BASE_URL: ${{ vars.MINEBBS_BASE_URL || 'https://www.minebbs.com' }}
+      MINEBBS_BUMP_INTERVAL_HOURS: ${{ vars.MINEBBS_BUMP_INTERVAL_HOURS || '16' }}
+      MINEBBS_ESA_SLIDER_ENABLED: ${{ vars.MINEBBS_ESA_SLIDER_ENABLED || 'false' }}
+      MINEBBS_BROWSER_EXECUTABLE_PATH: ${{ vars.MINEBBS_BROWSER_EXECUTABLE_PATH }}
+      AI_SOLVER_ENABLED: ${{ vars.AI_SOLVER_ENABLED || 'false' }}
+      AI_SOLVER_ENDPOINT: ${{ secrets.AI_SOLVER_ENDPOINT }}
+      AI_SOLVER_API_KEY: ${{ secrets.AI_SOLVER_API_KEY }}
+      AI_SOLVER_MODEL: ${{ vars.AI_SOLVER_MODEL }}
+      AI_SOLVER_TIMEOUT_SECONDS: ${{ vars.AI_SOLVER_TIMEOUT_SECONDS || '60' }}
+      AI_SOLVER_MAX_ATTEMPTS: ${{ vars.AI_SOLVER_MAX_ATTEMPTS || '1' }}
+      AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED: ${{ vars.AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED }}
+      WDSJFWQ_ENABLED: ${{ vars.WDSJFWQ_ENABLED || 'false' }}
+      WDSJFWQ_LIKE_URL: ${{ vars.WDSJFWQ_LIKE_URL || 'https://www.wdsjfwq.com/server-1991/vote.html' }}
+      MCLISTS_ENABLED: ${{ vars.MCLISTS_ENABLED || 'false' }}
+      MCLISTS_LIKE_URL: ${{ vars.MCLISTS_LIKE_URL || 'https://www.mclists.cn/server/9969.html' }}
+      RANK_THRESHOLD: ${{ vars.RANK_THRESHOLD || '10' }}
+      PAID_BUMP_COOLDOWN_SECONDS: ${{ vars.PAID_BUMP_COOLDOWN_SECONDS || '3600' }}
+      STATE_PATH: .state/state.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Restore operational state
+        uses: actions/cache/restore@v4
+        with:
+          path: .state/state.json
+          key: mc-automation-state-${{ github.run_id }}
+          restore-keys: |
+            mc-automation-state-
+
+      - name: Install application
+        shell: bash
+        run: |
+          if [[ "$MINEBBS_ESA_SLIDER_ENABLED" == "true" ]]; then
+            python -m pip install ".[browser]"
+            if [[ -n "$MINEBBS_BROWSER_EXECUTABLE_PATH" ]]; then
+              test -x "$MINEBBS_BROWSER_EXECUTABLE_PATH"
+            elif ! command -v google-chrome >/dev/null \
+              && ! command -v google-chrome-stable >/dev/null \
+              && ! command -v chromium >/dev/null \
+              && ! command -v chromium-browser >/dev/null; then
+              echo "nodriver requires an installed Chrome/Chromium browser."
+              exit 1
+            fi
+          else
+            python -m pip install .
+          fi
+
+      - name: Run automation
+        id: automation
+        shell: bash
+        run: |
+          mkdir -p .state
+          set +e
+          if [[ "$MINEBBS_ESA_SLIDER_ENABLED" == "true" ]]; then
+            xvfb-run -a python -m mc_automation.cli
+          else
+            python -m mc_automation.cli
+          fi
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Save operational state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .state/state.json
+          key: mc-automation-state-${{ github.run_id }}
+
+      - name: Propagate automation result
+        if: always() && steps.automation.outputs.exit_code != '0'
+        shell: bash
+        env:
+          AUTOMATION_EXIT_CODE: ${{ steps.automation.outputs.exit_code }}
+        run: |
+          echo "Automation requested attention (exit $AUTOMATION_EXIT_CODE)."
+          exit "$AUTOMATION_EXIT_CODE"
