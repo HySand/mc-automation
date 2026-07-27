@@ -54,7 +54,9 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   Both run through `HttpTransport` with explicit timeouts and the same fail-closed challenge checks.
 - GitHub Actions establishes a system-level Cloudflare WARP full tunnel before dependency setup and
   requires Cloudflare trace to report `warp=on` or `warp=plus`. Setup or verification failure aborts
-  the job; ordinary application traffic never falls back to the runner's original egress.
+  the job; ordinary application traffic never falls back to the runner's original egress. The
+  hosted-runner tunnel uses the IPv4 stack because dual-stack WARP produced MineBBS Turnstile 403s
+  and intermittent KLPBBS HTTP 200 shells on the same run.
 - Only KLPBBS promotion-link clicks use the dynamic HTTP proxy pool. Proxy-source downloads,
   authenticated promotion task operations, and every other site request continue through WARP.
 - A promotion click uses a fresh session with `trust_env=False`, cleared cookies, explicit

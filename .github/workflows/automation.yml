@@ -95,7 +95,7 @@ jobs:
         uses: viperadnan-git/setup-warp@691f6aa5a251ed89ea27a85e890f6f5313c1a3b5
         with:
           mode: client
-          stack: dual
+          stack: ipv4
           retries: "3"
           configure_docker: "false"
 
