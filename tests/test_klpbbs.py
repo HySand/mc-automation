@@ -593,6 +593,40 @@ def test_promotion_ignores_management_link_and_uses_configured_fromuid_url() -> 
     assert visitor.urls == [configured_url]
 
 
+def test_promotion_uses_bare_task_one_progress_node_from_live_doing_page() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    apply_url = "https://example.test/home.php?mod=task&do=apply&id=1"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    configured_url = "https://example.test/?fromuid=5"
+    transport = FakeTransport(
+        {
+            task_url: "<html>incomplete task center</html>",
+            apply_url: "already doing",
+            doing_url: [
+                '<span id="csc_1">10</span>',
+                '<span id="csc_1">10</span>',
+            ],
+        }
+    )
+    visitor = FakePromotionVisitor([True])
+    adapter = KLPBBSAdapter(
+        replace(promotion_config(), promotion_url=configured_url),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SKIPPED
+    assert result.metadata == {
+        "attempts": 1,
+        "proxy_successes": 1,
+        "progress_percent": 10,
+    }
+    assert visitor.urls == [configured_url]
+
+
 def test_promotion_confirms_opaque_draw_by_rechecking_doing_tasks() -> None:
     task_url = "https://example.test/home.php?mod=task"
     draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"

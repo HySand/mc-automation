@@ -116,6 +116,16 @@ class KLPBBSAdapter:
                     complete=progress is not None and progress >= 100,
                     progress_percent=progress,
                 )
+            progress = self._task_progress(soup, "1")
+            if progress is not None:
+                return _PromotionTask(
+                    draw_url=(
+                        self._url("home.php?mod=task&do=draw&id=1") if progress >= 100 else None
+                    ),
+                    visit_url=self.config.promotion_url or None,
+                    complete=progress >= 100,
+                    progress_percent=progress,
+                )
             if any(marker in page_text for marker in ("暂无可用任务", "没有可用任务", "暂无任务")):
                 return None
             raise SiteParseError("KLPBBS 推广任务页面结构无法识别")
