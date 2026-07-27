@@ -74,6 +74,19 @@ def default_proxy_sources(today: date | None = None) -> tuple[ProxySource, ...]:
     )
     return checker_sources + (
         ProxySource(
+            "openproxylist-https",
+            "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt",
+        ),
+        ProxySource(
+            "yakumo-http-checked",
+            "https://raw.githubusercontent.com/elliottophellia/yakumo/master/"
+            "results/http/global/http_checked.txt",
+        ),
+        ProxySource(
+            "kangproxy-https",
+            "https://raw.githubusercontent.com/officialputuid/KangProxy/main/https/https.txt",
+        ),
+        ProxySource(
             "proxyscrape",
             "https://api.proxyscrape.com/v2/",
             params={

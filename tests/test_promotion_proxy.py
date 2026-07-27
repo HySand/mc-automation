@@ -11,6 +11,7 @@ from mc_automation.promotion_proxy import (
     PromotionVisitBatch,
     ProxyPromotionVisitor,
     ProxySource,
+    default_proxy_sources,
     normalize_http_proxy,
 )
 
@@ -89,6 +90,14 @@ def test_normalize_http_proxy_accepts_only_public_ip_literal_endpoints() -> None
     assert normalize_http_proxy("http://10.0.0.1:8080") is None
     assert normalize_http_proxy("https://8.8.8.8:443") is None
     assert normalize_http_proxy("proxy.example:8080") is None
+
+
+def test_default_sources_prioritize_fresh_checked_proxy_lists() -> None:
+    names = [source.name for source in default_proxy_sources()]
+
+    assert names.index("openproxylist-https") < names.index("proxyscrape")
+    assert names.index("yakumo-http-checked") < names.index("proxyscrape")
+    assert names.index("kangproxy-https") < names.index("proxyscrape")
 
 
 def test_dynamic_pool_isolates_source_failures_and_deduplicates_candidates() -> None:

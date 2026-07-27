@@ -65,6 +65,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   finite sources. It has no global candidate count or per-source quota. A source failure is isolated;
   otherwise all valid candidates from that source remain eligible until task completion or natural
   pool exhaustion.
+- Fresh checked sources (`openproxylist-https`, `yakumo-http-checked`, and `kangproxy-https`) are
+  loaded before the reference project's older aggregate sources. The source URLs are finite static
+  files and remain subject to the same response-size, public-IP, port, deduplication, and timeout
+  checks.
 - KLPBBS promotion uses stable task ID `1`, and the doing-task list is
   `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
   the click target because the task center does not necessarily render a per-account promotion URL.
