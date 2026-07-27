@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 browser = [
-    "nodriver>=0.50.3,<0.51",
+    "cloakbrowser==0.3.32",
 ]
 dev = [
     "mypy>=1.16,<2",

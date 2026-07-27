@@ -22,7 +22,7 @@ from .step_log import log_step
 
 
 class EsaSliderChallengeResolver:
-    """Clear an Alibaba ESA slide-to-end challenge using nodriver and DOM geometry."""
+    """Clear an Alibaba ESA challenge with the free CloakBrowser Chromium build."""
 
     HANDLE_SELECTOR = "#aliyunCaptcha-sliding-slider"
     TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"
@@ -214,16 +214,20 @@ class EsaSliderChallengeResolver:
             return False
 
         try:
-            nodriver = importlib.import_module("nodriver")
+            browser_module = importlib.import_module("cloakbrowser")
         except ImportError:
-            log_step(
-                "esa_nodriver_import",
-                site="minebbs",
-                status="failed",
-                resolved=False,
-            )
-            return False
-        log_step("esa_nodriver_import", site="minebbs", status="completed")
+            # Keep the legacy test seam available while deployments migrate to CloakBrowser.
+            try:
+                browser_module = importlib.import_module("nodriver")
+            except ImportError:
+                log_step(
+                    "esa_cloakbrowser_import",
+                    site="minebbs",
+                    status="failed",
+                    resolved=False,
+                )
+                return False
+        log_step("esa_cloakbrowser_import", site="minebbs", status="completed")
 
         try:
             for attempt in range(1, self.max_attempts + 1):
@@ -236,7 +240,9 @@ class EsaSliderChallengeResolver:
                     max_attempts=self.max_attempts,
                 )
                 try:
-                    resolved = asyncio.run(self._resolve_async(nodriver, url, session, timeout))
+                    resolved = asyncio.run(
+                        self._resolve_async(browser_module, url, session, timeout)
+                    )
                 except Exception as exc:
                     log_step(
                         "esa_attempt",
@@ -294,11 +300,16 @@ class EsaSliderChallengeResolver:
 
     async def _resolve_async(
         self,
-        nodriver: Any,
+        browser_module: Any,
         url: str,
         session: requests.Session,
         timeout: tuple[float, float],
     ) -> bool:
+        if hasattr(browser_module, "launch_persistent_context_async"):
+            return await self._resolve_cloak_async(browser_module, url, session, timeout)
+
+        # Keep the old fake-compatible branch for contract tests and local migration tools.
+        nodriver = browser_module
         browser: Any = None
         browser_session: tuple[list[Any], str] | None = None
         cleanup_ok = False
@@ -398,6 +409,201 @@ class EsaSliderChallengeResolver:
             session_synced=True,
         )
         return True
+
+    async def _resolve_cloak_async(
+        self,
+        cloakbrowser: Any,
+        url: str,
+        session: requests.Session,
+        timeout: tuple[float, float],
+    ) -> bool:
+        context: Any = None
+        profile_path = Path(tempfile.mkdtemp(prefix="mc-automation-esa-browser-"))
+        browser_session: tuple[list[Any], str] | None = None
+        cleanup_ok = False
+        try:
+            log_step("esa_browser_start", site="minebbs", status="started", headless=self.headless)
+            context = await cloakbrowser.launch_persistent_context_async(
+                str(profile_path),
+                headless=self.headless,
+                humanize=True,
+                human_preset="careful",
+                browser_version="146.0.7680.177.5",
+            )
+            log_step("esa_browser_start", site="minebbs", status="completed")
+            cookies = self._request_cookies_for_playwright(session, url)
+            if cookies:
+                await context.add_cookies(cookies)
+            page = await context.new_page()
+            navigation_timeout = max(timeout)
+            log_step(
+                "esa_navigation",
+                site="minebbs",
+                status="started",
+                url=url,
+                navigation_timeout_ms=round(navigation_timeout * 1000),
+            )
+            await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=round(navigation_timeout * 1000),
+            )
+            log_step("esa_navigation", site="minebbs", status="completed", url=url)
+            await self._settle_playwright_page(page)
+            cleared = await self._page_is_clear(page, expected_url=url)
+            log_step(
+                "esa_challenge_check",
+                site="minebbs",
+                status="completed",
+                already_clear=cleared,
+                resolved=cleared,
+            )
+            if not cleared:
+                cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
+                    page, expected_url=url
+                )
+            if cleared:
+                browser_session = await self._read_playwright_session(context, page)
+        except Exception as exc:
+            log_step(
+                "esa_cloakbrowser",
+                site="minebbs",
+                status="failed",
+                exception_type=type(exc).__name__,
+            )
+        finally:
+            if context is not None:
+                try:
+                    await asyncio.wait_for(
+                        context.close(), timeout=self.BROWSER_CLEANUP_TIMEOUT_SECONDS
+                    )
+                except Exception:
+                    cleanup_ok = False
+                else:
+                    cleanup_ok = True
+            else:
+                cleanup_ok = True
+            cleanup_ok = cleanup_ok and await self._remove_managed_profile(profile_path)
+            log_step(
+                "esa_browser_cleanup",
+                site="minebbs",
+                status="completed" if cleanup_ok else "failed",
+                cleanup_ok=cleanup_ok,
+            )
+        if browser_session is None or not cleanup_ok:
+            return False
+        cookies, user_agent = browser_session
+        self._copy_browser_session(cookies, user_agent, session)
+        log_step(
+            "esa_session_sync",
+            site="minebbs",
+            status="completed",
+            cookie_count=len(cookies),
+            session_synced=True,
+        )
+        return True
+
+    async def _drag_slider_playwright(self, page: Any) -> bool:
+        deadline = self._monotonic() + self.wait_seconds
+        frame: Any = None
+        handle_box: Any = None
+        track_box: Any = None
+        while self._monotonic() <= deadline:
+            for candidate in [page, *getattr(page, "frames", [])]:
+                try:
+                    handle_box = await candidate.locator(self.HANDLE_SELECTOR).first.bounding_box(
+                        timeout=250
+                    )
+                    track_box = await candidate.locator(self.TRACK_SELECTOR).first.bounding_box(
+                        timeout=250
+                    )
+                except Exception:
+                    continue
+                if handle_box and track_box:
+                    frame = candidate
+                    break
+            if frame is not None:
+                break
+            await self._sleep_ms(250)
+        if frame is None or handle_box is None or track_box is None:
+            log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
+            return False
+        handle_width = float(handle_box["width"])
+        handle_height = float(handle_box["height"])
+        track_width = float(track_box["width"])
+        if handle_width <= 0 or handle_height <= 0 or track_width <= handle_width:
+            log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
+            return False
+        grab_offset_x = handle_width * self._random.uniform(*self.HORIZONTAL_GRAB_RANGE)
+        grab_offset_y = handle_height * self._random.uniform(*self.VERTICAL_GRAB_RANGE)
+        start_x = float(handle_box["x"]) + grab_offset_x
+        start_y = float(handle_box["y"]) + grab_offset_y
+        clamp_end_x = float(track_box["x"]) + track_width - handle_width + grab_offset_x
+        distance = clamp_end_x - start_x
+        overshoot = distance * self._random.uniform(*self.END_OVERSHOOT_RANGE)
+        drag_path = self._bezier_drag_path(
+            start_x,
+            start_y,
+            clamp_end_x + overshoot,
+            point_count=self._randomized_drag_steps(),
+            vertical_radius=min(8.0, max(2.0, handle_height * 0.15)),
+            progress_values=self._manual_sample_progress(self._randomized_drag_steps()),
+        )
+        approach = self._bezier_drag_path(
+            start_x + track_width * 1.35,
+            start_y - handle_height * 2.7,
+            start_x,
+            end_y=start_y,
+            point_count=self.APPROACH_STEPS,
+            vertical_radius=handle_height,
+        )
+        approach_started = self._monotonic()
+        for step, (x, y) in enumerate(approach, 1):
+            await self._wait_for_drag_deadline(
+                approach_started, self.APPROACH_DURATION_MS * step / len(approach)
+            )
+            await page.mouse.move(x, y)
+        await page.mouse.down()
+        drag_started = self._monotonic()
+        deadlines = self._humanized_drag_deadlines(
+            len(drag_path), duration_ms=self.drag_duration_ms
+        )
+        for step, (x, y) in enumerate(drag_path, 1):
+            await self._wait_for_drag_deadline(drag_started, deadlines[step - 1])
+            await page.mouse.move(x, y)
+        log_step(
+            "esa_drag",
+            site="minebbs",
+            status="completed",
+            path_points=len(drag_path),
+            duration_ms=self.drag_duration_ms,
+            distance=round(distance, 2),
+        )
+        return True
+
+    @staticmethod
+    async def _settle_playwright_page(page: Any) -> None:
+        await page.wait_for_timeout(500)
+
+    @staticmethod
+    async def _read_playwright_session(context: Any, page: Any) -> tuple[list[Any], str]:
+        return await context.cookies(), await page.evaluate("navigator.userAgent")
+
+    @staticmethod
+    def _request_cookies_for_playwright(
+        session: requests.Session, url: str
+    ) -> list[dict[str, Any]]:
+        hostname = urlsplit(url).hostname or ""
+        return [
+            {
+                "name": c.name,
+                "value": c.value,
+                "domain": c.domain or hostname,
+                "path": c.path or "/",
+                "secure": bool(c.secure),
+            }
+            for c in session.cookies
+        ]
 
     async def _drag_slider(self, tab: Any, cdp: Any) -> bool:
         try:
@@ -723,20 +929,38 @@ class EsaSliderChallengeResolver:
 
     @classmethod
     async def _page_is_clear(cls, tab: Any, *, expected_url: str) -> bool:
-        challenge = detect_security_challenge(200, await tab.get_content())
+        content_method = getattr(tab, "content", None)
+        if callable(content_method):
+            content = await content_method()
+        else:
+            content = await tab.get_content()
+        challenge = detect_security_challenge(200, content)
         if challenge not in (None, "security challenge marker: aliyunCaptcha"):
             return False
-        state = await tab.evaluate(
-            f"JSON.stringify({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r}),"
+        script = (
+            f"({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r}),"
             "title:document.title,href:location.href,readyState:document.readyState,"
-            "hasBody:!!document.body}})",
-            return_by_value=True,
+            "hasBody:!!document.body}})"
         )
-        if not isinstance(state, str):
-            return False
         try:
-            parsed = json.loads(state)
+            if callable(content_method):
+                parsed = await tab.evaluate(script)
+                for frame in getattr(tab, "frames", []):
+                    try:
+                        frame_state = await frame.evaluate(
+                            f"({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r})}})"
+                        )
+                    except Exception:
+                        continue
+                    if isinstance(frame_state, dict) and frame_state.get("slider"):
+                        parsed = {**parsed, "slider": True}
+                        break
+            else:
+                state = await tab.evaluate("JSON.stringify(" + script + ")", return_by_value=True)
+                parsed = json.loads(state) if isinstance(state, str) else None
         except (TypeError, ValueError):
+            return False
+        if not isinstance(parsed, dict):
             return False
         title = str(parsed.get("title", ""))
         href = str(parsed.get("href", ""))

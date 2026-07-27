@@ -127,22 +127,7 @@ jobs:
         run: |
           if [[ "$MINEBBS_ESA_SLIDER_ENABLED" == "true" ]]; then
             python -m pip install ".[browser]"
-            if [[ -n "$MINEBBS_BROWSER_EXECUTABLE_PATH" ]]; then
-              test -x "$MINEBBS_BROWSER_EXECUTABLE_PATH"
-            else
-              for candidate in google-chrome google-chrome-stable chromium-browser chromium; do
-                if command -v "$candidate" >/dev/null; then
-                  browser_path="$(command -v "$candidate")"
-                  break
-                fi
-              done
-              if [[ -z "${browser_path:-}" ]]; then
-                echo "nodriver requires an installed Chrome/Chromium browser."
-                exit 1
-              fi
-              echo "MINEBBS_BROWSER_EXECUTABLE_PATH=$browser_path" >> "$GITHUB_ENV"
-              echo "MineBBS browser: $browser_path"
-            fi
+            python -m cloakbrowser install
           else
             python -m pip install .
           fi

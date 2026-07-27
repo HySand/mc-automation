@@ -230,21 +230,18 @@ def test_like_sites_have_no_private_target_restriction() -> None:
     assert config.mclists.url == "https://www.mclists.cn/server/9969.html"
 
 
-def test_browser_extra_and_workflow_use_nodriver() -> None:
+def test_browser_extra_and_workflow_use_free_cloakbrowser() -> None:
     root = Path(__file__).parents[1]
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     browser_dependencies = project["project"]["optional-dependencies"]["browser"]
     workflow = (root / ".github" / "workflows" / "automation.yml").read_text(encoding="utf-8")
 
-    assert browser_dependencies == ["nodriver>=0.50.3,<0.51"]
+    assert browser_dependencies == ["cloakbrowser==0.3.32"]
     legacy_browser_command = "python -m " + "play" + "wright"
     assert legacy_browser_command not in workflow.casefold()
     assert "MINEBBS_ESA_SLIDER_ENABLED" in workflow
+    assert "python -m cloakbrowser install" in workflow
     assert "MINEBBS_BROWSER_EXECUTABLE_PATH" in workflow
-    assert (
-        "for candidate in google-chrome google-chrome-stable chromium-browser chromium" in workflow
-    )
-    assert 'echo "MINEBBS_BROWSER_EXECUTABLE_PATH=$browser_path" >> "$GITHUB_ENV"' in workflow
     assert "mc-automation-${{ matrix.site }}-state-v3-${{ github.run_id }}" in workflow
     assert "Clear legacy MineBBS ESA suspension" not in workflow
     assert "challenge_count" not in workflow

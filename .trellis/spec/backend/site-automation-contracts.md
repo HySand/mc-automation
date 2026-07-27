@@ -27,14 +27,12 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED` inherits `AI_SOLVER_ENABLED` instead of disabling the captcha
   solver.
 - MineBBS ESA option: `MINEBBS_ESA_SLIDER_ENABLED` (default `false`) enables up to three independent
-  `nodriver` slide-to-end attempts from DOM geometry. It requires `MINEBBS_ENABLED=true` and does not require or
+  `CloakBrowser` slide-to-end attempts from DOM geometry. It requires `MINEBBS_ENABLED=true` and does not require or
   consume AI endpoint, key, model, prompt, or screenshot data.
-- Optional `MINEBBS_BROWSER_EXECUTABLE_PATH` points to an existing Chromium-family browser executable when
-  `nodriver` cannot auto-discover one. An empty value leaves discovery to `nodriver`.
-- GitHub Actions resolves an empty browser path before execution, preferring `google-chrome`, then
-  `google-chrome-stable`, `chromium-browser`, and `chromium`, and exports the resolved executable
-  through `GITHUB_ENV`. This avoids nodriver selecting an unusable Snap wrapper such as
-  `/bin/chromium` on hosted Ubuntu runners.
+- `MINEBBS_BROWSER_EXECUTABLE_PATH` remains accepted for backwards-compatible local configuration,
+  but the free `cloakbrowser==0.3.32` package downloads and uses its pinned Chromium v146 binary.
+- GitHub Actions installs the optional browser extra and runs `python -m cloakbrowser install`; no
+  license key or external browser executable is required.
 - On Windows, if the default Chrome/Chromium discovery raises `FileNotFoundError`, the resolver may
   retry browser startup once with an installed Microsoft Edge executable. This is browser selection,
   not a second ESA challenge attempt; if no fallback exists, the resolver returns `False`.
@@ -263,7 +261,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 ### 3. Contracts
 
 - Configuration is rejected unless `MINEBBS_ENABLED=true`; no `AI_SOLVER_*` value is required.
-- The resolver imports `nodriver` lazily, creates and owns a temporary profile before browser
+- The resolver imports `CloakBrowser` lazily, creates and owns a temporary profile before browser
   startup, launches visible Chromium with that explicit profile, copies request cookies into the
   browser, and navigates only to the challenged URL. The profile is removed after successful use,
   failed startup, navigation failure, or protocol failure.
@@ -281,14 +279,14 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   `target_elapsed = drag_duration_ms * step / drag_steps`; the resolver waits for that deadline before
   sending the corresponding CDP event. Do not add a fixed delay after every browser protocol call,
   because cross-process call overhead otherwise stretches a configured drag once per event. The resolver
-  uses low-level `Input.dispatchMouseEvent`; nodriver's high-level `mouse_move()` helper is not used
+  uses low-level `Input.dispatchMouseEvent`; CloakBrowser's high-level `mouse_move()` helper is not used
   because it releases the button after each move.
 - Movement deadlines are irregular rather than evenly spaced. The complete injected input sequence
   is unheld approach `mouseMoved` events (`button=none, buttons=0`), one `mousePressed` event
   (`button=left, buttons=1`), then held `mouseMoved` events (`button=none, buttons=1`). Do not inject
   `mouseReleased` or any other mouse event. ESA evaluates the pre-press pointer history: replaying
   the successful held trace without its approach history is rejected, while the complete sequence
-  clears the public MineBBS challenge in the same `nodriver` browser.
+  clears the public MineBBS challenge in the same `CloakBrowser` browser.
 - ESA's current dynamic module rotates (`dynamicJS/3.28.0/sg.*.js`) and the browser reduces
   effective `clientX/clientY` values to integers. Dynamic filenames, hashes, internal variable
   names, and encrypted payload values are not implementation contracts. A successful HTTP verify
@@ -309,7 +307,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 
 | Condition | Result |
 |---|---|
-| `nodriver` missing or browser launch fails | Return `False`; transport raises `SecurityChallenge` |
+| `CloakBrowser` missing or browser launch fails | Return `False`; transport raises `SecurityChallenge` |
 | Handle or track missing/not visible | Return `False`; no mouse input or session sync |
 | Non-positive dimensions or track not wider than handle | Return `False`; no drag |
 | Drag completes but challenge remains | Return `False`; no cookie/User-Agent sync |
@@ -336,7 +334,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 - Assert movement events use native `button/buttons` semantics, deadlines are non-uniform, and no
   endpoint dwell occurs before release.
 - Assert cookies/User-Agent copy only after clear, the browser profile closes on all paths, missing
-  geometry is unresolved, and missing `nodriver`/Chromium is unresolved.
+  geometry is unresolved, and missing `CloakBrowser`/Chromium is unresolved.
 - Assert the resolver-owned temporary profile is removed after both successful startup and failed
   browser launch; no `uc_*` or resolver-prefixed profile is retained by the normal path.
 - Assert configuration/workflow install browser support from `MINEBBS_ESA_SLIDER_ENABLED`, not from
