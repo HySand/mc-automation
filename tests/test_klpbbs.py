@@ -219,7 +219,7 @@ def test_purchase_reports_insufficient_resources_without_retrying() -> None:
 def test_promotion_task_applies_visits_and_draws_reward() -> None:
     task_url = "https://example.test/home.php?mod=task"
     apply_url = "https://example.test/home.php?mod=task&do=apply&id=7"
-    doing_url = "https://example.test/home.php?mod=task&do=doing"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
     visit_url = "https://example.test/promotion?fromuid=5"
     draw_url = "https://example.test/home.php?mod=task&do=draw&id=7"
     transport = FakeTransport(
@@ -268,7 +268,7 @@ def test_promotion_task_applies_visits_and_draws_reward() -> None:
 
 def test_promotion_task_stops_at_configured_visit_cap() -> None:
     task_url = "https://example.test/home.php?mod=task"
-    doing_url = "https://example.test/home.php?mod=task&do=doing"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
     visit_url = "https://example.test/promotion?fromuid=5"
     incomplete = (
         '<div class="task">推广任务 进行中 <a href="/promotion?fromuid=5">推广链接</a></div>'
@@ -317,15 +317,23 @@ def test_promotion_task_draws_already_completed_reward_without_visits() -> None:
     assert len(transport.calls) == 2
 
 
-def test_promotion_task_rejects_unknown_markup_without_visiting() -> None:
+def test_promotion_task_uses_stable_task_one_when_the_list_is_incomplete() -> None:
     task_url = "https://example.test/home.php?mod=task"
-    transport = FakeTransport({task_url: "<html>new task layout</html>"})
+    apply_url = "https://example.test/home.php?mod=task&do=apply&id=1"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    transport = FakeTransport(
+        {
+            task_url: "<html>new task layout</html>",
+            apply_url: "当前无法申请",
+            doing_url: "暂无任务",
+        }
+    )
     adapter = KLPBBSAdapter(promotion_config(), transport, base_url="https://example.test")
 
-    with pytest.raises(SiteParseError, match="推广任务页面结构无法识别"):
-        adapter.run_promotion_task()
+    result = adapter.run_promotion_task()
 
-    assert len(transport.calls) == 1
+    assert result.status is ActionStatus.SKIPPED
+    assert [call[1] for call in transport.calls] == [task_url, apply_url, doing_url]
 
 
 def test_promotion_task_requires_a_proxy_visitor() -> None:
@@ -364,3 +372,35 @@ def test_promotion_task_rejects_a_link_that_leaves_the_klpbbs_origin() -> None:
     with pytest.raises(SiteParseError, match="不属于当前站点源"):
         adapter.run_promotion_task()
     assert not visitor.urls
+
+
+def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    apply_url = "https://example.test/home.php?mod=task&do=apply&id=1"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+    promotion_url = "https://example.test/?fromuid=5"
+    transport = FakeTransport(
+        {
+            task_url: "<html>incomplete task center</html>",
+            apply_url: "任务申请成功",
+            doing_url: [
+                '<a href="home.php?mod=task&do=draw&id=1">领取奖励</a>',
+            ],
+            draw_url: "请注意查收",
+        }
+    )
+    visitor = FakePromotionVisitor([])
+    site_config = replace(promotion_config(), promotion_url=promotion_url)
+    adapter = KLPBBSAdapter(
+        site_config,
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert not visitor.urls
+    assert [call[1] for call in transport.calls] == [task_url, apply_url, doing_url, draw_url]

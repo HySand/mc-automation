@@ -63,6 +63,34 @@ class KLPBBSAdapter:
             ):
                 candidates.append(candidate)
         if not candidates:
+            task_one = [
+                anchor
+                for anchor in soup.select('a[href*="mod=task"][href*="id=1"]')
+                if parse_qs(urlsplit(str(anchor.get("href", ""))).query).get("id") == ["1"]
+            ]
+            if task_one:
+                task_apply_url = next(
+                    (
+                        self._url(str(anchor["href"]))
+                        for anchor in task_one
+                        if self._task_action(str(anchor["href"]), "apply")
+                    ),
+                    None,
+                )
+                task_draw_url = next(
+                    (
+                        self._url(str(anchor["href"]))
+                        for anchor in task_one
+                        if self._task_action(str(anchor["href"]), "draw")
+                    ),
+                    None,
+                )
+                return _PromotionTask(
+                    apply_url=task_apply_url,
+                    draw_url=task_draw_url,
+                    visit_url=self.config.promotion_url or None,
+                    complete=task_draw_url is not None,
+                )
             if any(marker in page_text for marker in ("暂无可用任务", "没有可用任务", "暂无任务")):
                 return None
             raise SiteParseError("KLPBBS 推广任务页面结构无法识别")
@@ -106,7 +134,13 @@ class KLPBBSAdapter:
         response = self.transport.get(draw_url)
         if any(
             marker in response.text
-            for marker in ("任务奖励已领取", "领取奖励成功", "任务完成", "succeed")
+            for marker in (
+                "任务奖励已领取",
+                "领取奖励成功",
+                "请注意查收",
+                "任务完成",
+                "succeed",
+            )
         ):
             metadata: dict[str, str | int | bool | None] = {"visits": visits}
             if attempts is not None:
@@ -126,18 +160,27 @@ class KLPBBSAdapter:
         if not self.config.promotion_enabled:
             return self._result("promotion_task", ActionStatus.SKIPPED, "推广任务未启用")
 
-        task = self._load_promotion_task()
+        try:
+            task = self._load_promotion_task()
+        except SiteParseError:
+            # KLPBBS task 1 is stable even when the task-center list renders an incomplete shell.
+            task = _PromotionTask(apply_url=self._url("home.php?mod=task&do=apply&id=1"))
         if task is None:
             return self._result("promotion_task", ActionStatus.SKIPPED, "当前没有可用推广任务")
         if task.apply_url is not None:
             response = self.transport.get(task.apply_url)
-            if not any(
+            apply_succeeded = any(
                 marker in response.text for marker in ("任务申请成功", "成功申请", "succeed")
-            ):
-                raise SiteParseError("KLPBBS 推广任务领取结果无法确认")
-            task = self._load_promotion_task("home.php?mod=task&do=doing")
+            )
+            task = self._load_promotion_task("home.php?mod=task&item=doing")
             if task is None:
-                raise SiteParseError("KLPBBS 推广任务领取后未出现在进行中列表")
+                if apply_succeeded:
+                    raise SiteParseError("KLPBBS 推广任务领取后未出现在进行中列表")
+                return self._result(
+                    "promotion_task",
+                    ActionStatus.SKIPPED,
+                    "推广任务不可申请且不在进行中列表",
+                )
 
         if task.draw_url is not None:
             return self._draw_promotion_reward(task.draw_url, 0)
@@ -146,7 +189,14 @@ class KLPBBSAdapter:
                 "promotion_task", ActionStatus.SUCCESS, "推广任务已完成，页面未提供额外领奖动作"
             )
         if task.visit_url is None:
-            raise SiteParseError("KLPBBS 推广任务进行中但缺少推广链接")
+            task = _PromotionTask(
+                task.apply_url,
+                task.draw_url,
+                self.config.promotion_url or None,
+                task.complete,
+            )
+        if task.visit_url is None:
+            raise SiteParseError("KLPBBS 推广任务进行中但缺少 KLPBBS_PROMOTION_URL")
         if self.promotion_visitor is None:
             raise SiteParseError("KLPBBS 推广任务已启用但代理访问器未配置")
         if not self._is_same_origin(task.visit_url):
@@ -159,7 +209,7 @@ class KLPBBSAdapter:
                     time.sleep(self.config.promotion_visit_delay_seconds)
                 continue
             successful_visits += 1
-            task = self._load_promotion_task("home.php?mod=task&do=doing")
+            task = self._load_promotion_task("home.php?mod=task&item=doing")
             if task is None:
                 raise SiteParseError("KLPBBS 推广访问后任务状态消失")
             if task.draw_url is not None:

@@ -37,8 +37,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Site base URLs remain explicit configuration. There is no host allowlist, DNS-address restriction,
   bypass header, proxy-based WAF bypass, or public/private routing switch.
 - KLPBBS promotion needs only `KLPBBS_PROMOTION_ENABLED`, `KLPBBS_PROMOTION_MAX_VISITS`, and
-  `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS`; the obsolete proxy-target URL and marker keys must not be
-  restored.
+  `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS`, plus a required same-origin `KLPBBS_PROMOTION_URL`; the
+  obsolete proxy-target URL and marker keys must not be restored.
 
 ## Transport and challenge behavior
 
@@ -52,6 +52,9 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - A promotion click uses a fresh session with `trust_env=False`, cleared headers/cookies, explicit
   `http`/`https` proxy arguments, TLS verification enabled, and redirects disabled. The adapter must
   validate that the exact promotion URL is same-origin before passing it to the visitor.
+- KLPBBS promotion uses stable task ID `1`, and the doing-task list is
+  `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
+  the click target because the task center does not necessarily render a per-account promotion URL.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
 - If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium once.

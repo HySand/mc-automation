@@ -121,6 +121,7 @@ def test_ai_solver_configuration_does_not_change_site_configuration() -> None:
             "KLPBBS_PASSWORD": "p",
             "KLPBBS_THREAD_ID": "12",
             "KLPBBS_PROMOTION_ENABLED": "true",
+            "KLPBBS_PROMOTION_URL": "https://klpbbs.com/?fromuid=5",
             "KLPBBS_PROMOTION_MAX_VISITS": "4",
             "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS": "0.5",
         }
@@ -186,7 +187,7 @@ def test_ai_solver_requires_secret_configuration_without_echoing_values() -> Non
     assert "private-ai.example.test" not in str(error.value)
 
 
-def test_promotion_only_requires_klpbbs_configuration() -> None:
+def test_promotion_requires_a_same_origin_url() -> None:
     config = AppConfig.from_env(
         {
             "KLPBBS_ENABLED": "true",
@@ -194,10 +195,24 @@ def test_promotion_only_requires_klpbbs_configuration() -> None:
             "KLPBBS_PASSWORD": "p",
             "KLPBBS_THREAD_ID": "12",
             "KLPBBS_PROMOTION_ENABLED": "true",
+            "KLPBBS_PROMOTION_URL": "https://klpbbs.com/?fromuid=5",
         }
     )
 
     assert config.klpbbs.promotion_enabled
+    assert config.klpbbs.promotion_url == "https://klpbbs.com/?fromuid=5"
+
+    with pytest.raises(ConfigurationError, match="KLPBBS_PROMOTION_URL"):
+        AppConfig.from_env(
+            {
+                "KLPBBS_ENABLED": "true",
+                "KLPBBS_USERNAME": "u",
+                "KLPBBS_PASSWORD": "p",
+                "KLPBBS_THREAD_ID": "12",
+                "KLPBBS_PROMOTION_ENABLED": "true",
+                "KLPBBS_PROMOTION_URL": "https://outside.example/?fromuid=5",
+            }
+        )
 
 
 def test_minebbs_bump_interval_must_be_positive() -> None:
@@ -237,3 +252,4 @@ def test_workflow_enforces_warp_and_keeps_promotion_proxy_configuration_separate
     assert "^warp=(on|plus)$" in workflow
     assert "KLPBBS_PROMOTION_PROXY_TARGET_URL" not in workflow
     assert "KLPBBS_PROMOTION_TARGET_MARKER" not in workflow
+    assert "KLPBBS_PROMOTION_URL" in workflow

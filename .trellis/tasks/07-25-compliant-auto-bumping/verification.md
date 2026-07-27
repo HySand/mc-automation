@@ -20,7 +20,7 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | Workflow and dependency wiring | `uv lock --check`, CLI dry-run, and Workflow YAML parsing | Pass |
 | Complete step logging | JSONL logs cover CLI, orchestration, HTTP, WDSJFWQ AI/form/count confirmation, and ESA browser/DOM/drag/session stages; sentinel secrets, captcha text, image data, form values, raw bodies, and URL query values are absent | Pass |
 | WARP and promotion routing | Actions pins WARP setup to commit `691f6aa5a251ed89ea27a85e890f6f5313c1a3b5`, requires Cloudflare trace `warp=on`/`warp=plus`, and fails before application execution otherwise. Only the final same-origin KLPBBS promotion click uses a fresh `trust_env=False` session with an explicit dynamic HTTP proxy | Pass in workflow and unit contract tests; live Actions run pending push |
-| Marker removal and rank policy | Obsolete promotion target/marker fields are absent from runtime configuration and workflow; local/GitHub promotion switch is enabled and `RANK_THRESHOLD=8` | Pass |
+| Marker removal and rank policy | Obsolete promotion target/marker fields are absent from runtime configuration and workflow; the former marker value is migrated to required same-origin `KLPBBS_PROMOTION_URL`; local/GitHub promotion switch is enabled and `RANK_THRESHOLD=8` | Pass |
 | KLPBBS forum-list regression | First WARP run returned two 116584-byte HTTP 200 pages but no recognized normal rows. Rank parsing now probes the rewritten and canonical forum paths, accepts only normal-row IDs or their `th.new a.xst` subject links, and logs a non-sensitive row count | Pass in regression tests; live Actions recheck pending |
 
 Final gate:

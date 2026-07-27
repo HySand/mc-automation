@@ -37,6 +37,7 @@
 | `MINEBBS_ENABLED` | `false` | 启用 MineBBS 适配器 |
 | `RANK_THRESHOLD` | `8` | KLPBBS 排名门槛；排名大于该值时尝试顶贴 |
 | `KLPBBS_PROMOTION_ENABLED` | `false` | 启用 KLPBBS 官方推广任务 |
+| `KLPBBS_PROMOTION_URL` | 空 | KLPBBS 账号的同源推广链接，例如 `https://klpbbs.com/?fromuid=123456`；启用推广时必填 |
 | `KLPBBS_PROMOTION_MAX_VISITS` | `10` | 每轮推广代理点击上限 |
 | `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS` | `2` | 串行代理点击间隔，最低 `0.5` 秒 |
 | `PAID_BUMP_COOLDOWN_SECONDS` | `3600` | KLPBBS 付费顶贴冷却 |
@@ -91,4 +92,4 @@ WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只�
 
 运行时还会输出逐步 JSONL 日志，覆盖配置、状态、各站点动作、HTTP、WDSJFWQ 验证码图片下载/AI 识别/表单提交/计数确认，以及 MineBBS ESA 浏览器/DOM/拖动/清理流程。URL 仅保留 scheme、host、port 和 path；日志只记录字段名、状态、数量及耗时，不记录表单值、验证码文本、图片 Base64、AI endpoint/key 或原始响应正文。
 
-普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie、CSRF token 或 Referer，不关闭 TLS 校验，也不跟随重定向。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。
+普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie、CSRF token 或 Referer，不关闭 TLS 校验，也不跟随重定向。`KLPBBS_PROMOTION_URL` 必须与 `KLPBBS_BASE_URL` 同源。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。

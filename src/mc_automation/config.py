@@ -85,6 +85,21 @@ def _base_url(raw: str, name: str) -> str:
     return value
 
 
+def _same_origin_url(raw: str, base_url: str, name: str) -> str:
+    value = _base_url(raw, name)
+    parsed = urlsplit(value)
+    base = urlsplit(base_url)
+    parsed_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    base_port = base.port or (443 if base.scheme == "https" else 80)
+    if (
+        parsed.scheme.casefold() != base.scheme.casefold()
+        or (parsed.hostname or "").casefold() != (base.hostname or "").casefold()
+        or parsed_port != base_port
+    ):
+        raise ConfigurationError(f"{name} 必须属于 KLPBBS_BASE_URL")
+    return value
+
+
 def _required(env: Mapping[str, str], names: tuple[str, ...], site: str) -> dict[str, str]:
     values = {name: env.get(name, "").strip() for name in names}
     missing = [name for name, value in values.items() if not value]
@@ -148,6 +163,7 @@ class SiteConfig:
     thread_id: str = ""
     base_url: str = ""
     promotion_enabled: bool = False
+    promotion_url: str = ""
     promotion_max_visits: int = 10
     promotion_visit_delay_seconds: float = 2.0
 
@@ -233,17 +249,31 @@ class AppConfig:
                 ),
                 "KLPBBS",
             )
+            klp_base_url = _base_url(
+                source.get("KLPBBS_BASE_URL", "https://klpbbs.com"),
+                "KLPBBS_BASE_URL",
+            )
+            promotion_url = ""
+            if promotion_enabled:
+                promotion_value = _required(
+                    source,
+                    ("KLPBBS_PROMOTION_URL",),
+                    "KLPBBS 推广任务",
+                )["KLPBBS_PROMOTION_URL"]
+                promotion_url = _same_origin_url(
+                    promotion_value,
+                    klp_base_url,
+                    "KLPBBS_PROMOTION_URL",
+                )
             klp = SiteConfig(
                 name="klpbbs",
                 enabled=True,
                 username=values["KLPBBS_USERNAME"],
                 password=values["KLPBBS_PASSWORD"],
                 thread_id=_thread_id(values["KLPBBS_THREAD_ID"], "KLPBBS_THREAD_ID"),
-                base_url=_base_url(
-                    source.get("KLPBBS_BASE_URL", "https://klpbbs.com"),
-                    "KLPBBS_BASE_URL",
-                ),
+                base_url=klp_base_url,
                 promotion_enabled=promotion_enabled,
+                promotion_url=promotion_url,
                 promotion_max_visits=_bounded_positive_int(
                     source, "KLPBBS_PROMOTION_MAX_VISITS", 10, 100
                 ),
