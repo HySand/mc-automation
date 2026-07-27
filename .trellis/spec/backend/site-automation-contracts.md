@@ -78,11 +78,13 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Discuz renders authoritative task progress in `#csc_1`. A successful proxy HTTP response is only
   a candidate visit and must not be counted as task progress. An incomplete task may still expose a
   `do=draw&id=1` link with a `rewardless.gif`; draw is allowed only when `#csc_1` is at least 100 or
-  the task scope has an explicit completed marker. Failed proxy responses consume that proxy and
-  continue immediately without a delay or task-page read. Proxy clicks run in bounded batches of at
-  most 20 workers; authenticated task operations remain single-threaded. A batch with any successful
-  response triggers one fresh authenticated progress read, and pool exhaustion triggers a final read
-  before the run is skipped.
+  the task scope has an explicit completed marker. To match the working `klpAutomation` closure when
+  the task page does not expose a parseable `#csc_1`, every 12 HTTP 200 candidate visits wait 15
+  seconds and try task 1's authenticated draw endpoint; an unconfirmed draw continues with the
+  remaining proxies. Failed proxy responses consume that proxy and continue immediately without a
+  delay or task-page read. Proxy clicks run in bounded batches of at most 20 workers; authenticated
+  task operations remain single-threaded. A batch with any successful response triggers one fresh
+  authenticated progress read, and pool exhaustion triggers a final read before the run is skipped.
 - A draw response may be opaque. It counts as successful only when it contains a known success
   marker or one fresh authenticated `item=doing` read proves task ID 1's `do=draw` link has
   disappeared. Other task ID 1 links, such as `do=apply`, do not mean the completed task remains.

@@ -358,6 +358,33 @@ def draw_url_not_called(calls: list[tuple[str, str, dict[str, Any]]]) -> bool:
     return not any("do=draw" in url for _, url, _ in calls)
 
 
+def test_promotion_task_matches_reference_draw_cycle_when_progress_is_opaque(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    visit_url = "https://example.test/promotion?fromuid=5"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+    opaque = '<a href="home.php?mod=task&do=draw&id=1">task 1</a>'
+    transport = FakeTransport({task_url: opaque, doing_url: opaque, draw_url: "succeed"})
+    visitor = FakePromotionVisitor([True] * 12)
+    sleeps: list[float] = []
+    monkeypatch.setattr("mc_automation.sites.klpbbs.time.sleep", sleeps.append)
+    adapter = KLPBBSAdapter(
+        replace(promotion_config(), promotion_url=visit_url),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert result.metadata == {"proxy_successes": 12, "attempts": 12}
+    assert sleeps.count(15.0) == 1
+    assert [call[1] for call in transport.calls].count(draw_url) == 1
+
+
 def test_promotion_task_detects_completion_on_final_pool_check() -> None:
     task_url = "https://example.test/home.php?mod=task"
     doing_url = "https://example.test/home.php?mod=task&item=doing"

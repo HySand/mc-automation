@@ -14,6 +14,9 @@ from ..step_log import log_step
 from ..transport import HttpTransport
 from .base import SiteParseError
 
+PROMOTION_DRAW_STEP_SIZE = 12
+PROMOTION_SYNC_WAIT_SECONDS = 15.0
+
 
 @dataclass(frozen=True, slots=True)
 class _PromotionTask:
@@ -252,6 +255,7 @@ class KLPBBSAdapter:
 
         attempts = 0
         proxy_successes = 0
+        successes_since_draw = 0
         previous_progress = task.progress_percent
         while True:
             try:
@@ -295,8 +299,19 @@ class KLPBBSAdapter:
 
             attempts += batch.attempts
             proxy_successes += batch.proxy_successes
+            successes_since_draw += batch.proxy_successes
             if batch.proxy_successes == 0 and not batch.exhausted:
                 continue
+            while successes_since_draw >= PROMOTION_DRAW_STEP_SIZE:
+                time.sleep(PROMOTION_SYNC_WAIT_SECONDS)
+                reward = self._draw_promotion_reward(
+                    self._url("home.php?mod=task&do=draw&id=1"),
+                    proxy_successes,
+                    attempts=attempts,
+                )
+                if reward.status is ActionStatus.SUCCESS:
+                    return reward
+                successes_since_draw -= PROMOTION_DRAW_STEP_SIZE
             task = self._load_promotion_task("home.php?mod=task&item=doing")
             if task is None:
                 raise SiteParseError("KLPBBS 推广访问后任务状态消失")
