@@ -254,22 +254,25 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   startup, launches visible Chromium with that explicit profile, copies request cookies into the
   browser, and navigates only to the challenged URL. The profile is removed after successful use,
   failed startup, navigation failure, or protocol failure.
-- Start is the handle center. The track clamp point is `track.right - handle.width / 2`. For the
-  observed 320 px track distance, the generated path has about 61 points over 465 ms: an initial
-  stationary/1 px probe, monotonic X movement, smooth 7-10 px upward drift, and a final pointer
-  position 35-40% beyond the clamp point before release. The page clamps the handle itself at the
-  track end. Production entropy is local; tests inject a seeded `random.Random` instance for
-  reproducibility.
+- Press starts at a random safe point inside the handle: 22-78% horizontally and 28-72%
+  vertically. The clamp pointer coordinate preserves that sampled grab offset instead of assuming
+  the handle center. Before pressing, a 232-point cubic Bezier approach crosses the viewport over
+  about 1.2 seconds and ends on the sampled grab point. The held path crosses the clamp by 36-40%
+  of travel and the page constrains the handle to the track. Its 61 normalized points and 465 ms
+  deadlines are scaled from the successful manual sample. Tests inject a seeded `random.Random`
+  instance for reproducibility.
 - Each movement point is scheduled against an absolute monotonic deadline:
-  `target_elapsed = drag_duration_ms * step / drag_steps`; the wait after each CDP mouse event is the
-  remaining time only. Do not add a fixed delay after every browser protocol call, because cross-process
-  call overhead otherwise stretches a configured drag once per event. The resolver
+  `target_elapsed = drag_duration_ms * step / drag_steps`; the resolver waits for that deadline before
+  sending the corresponding CDP event. Do not add a fixed delay after every browser protocol call,
+  because cross-process call overhead otherwise stretches a configured drag once per event. The resolver
   uses low-level `Input.dispatchMouseEvent`; nodriver's high-level `mouse_move()` helper is not used
   because it releases the button after each move.
-- Movement deadlines are mildly irregular rather than evenly spaced. Press uses
-  `button=left, buttons=1`; held movement uses native-like `button=none, buttons=1`; release uses
-  `button=left, buttons=0`. Release occurs immediately at the endpoint: do not add a motionless
-  endpoint dwell to the sampled drag behavior.
+- Movement deadlines are irregular rather than evenly spaced. The complete injected input sequence
+  is unheld approach `mouseMoved` events (`button=none, buttons=0`), one `mousePressed` event
+  (`button=left, buttons=1`), then held `mouseMoved` events (`button=none, buttons=1`). Do not inject
+  `mouseReleased` or any other mouse event. ESA evaluates the pre-press pointer history: replaying
+  the successful held trace without its approach history is rejected, while the complete sequence
+  clears the public MineBBS challenge in the same `nodriver` browser.
 - ESA's current dynamic module rotates (`dynamicJS/3.28.0/sg.*.js`) and the browser reduces
   effective `clientX/clientY` values to integers. Dynamic filenames, hashes, internal variable
   names, and encrypted payload values are not implementation contracts. A successful HTTP verify
@@ -281,8 +284,8 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   `Result.VerifyResult=false`. Do not promote an input route based only on unit path tests; require a
   live service decision that removes the challenge page. Do not repeatedly tune path parameters
   after the service has rejected both CDP and native injected replays of the same accepted sample.
-- Browser cookies and `navigator.userAgent` are copied back only after
-  `detect_security_challenge(200, await tab.get_content())` reports clear and browser cleanup
+- Browser cookies and `navigator.userAgent` are copied back only after the slider DOM is absent,
+  the title has left the verification page, and browser cleanup
   succeeds.
 
 ### 4. Validation & Error Matrix
@@ -309,8 +312,8 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 
 - Assert the resolver queries both fixed selectors and calculates the final handle center at the
   track end.
-- Assert the successful-sample shape: first-frame probing, monotonic X, smooth bounded upward drift,
-  endpoint overshoot, mouse down, dense intermediate moves, and mouse up without any solver call.
+- Assert cubic Bezier geometry, monotonic X, bounded smooth Y, exact endpoint, one mouse down, and
+  dense held mouse moves without any other mouse event or solver call.
 - Assert the absolute timing schedule subtracts injected CDP event-call overhead and keeps the
   movement segment within the configured duration budget.
 - Assert movement events use native `button/buttons` semantics, deadlines are non-uniform, and no

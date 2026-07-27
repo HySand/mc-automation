@@ -79,7 +79,7 @@ AI_SOLVER_API_KEY=...
 AI_SOLVER_MODEL=gpt-4o-mini
 ```
 
-WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只返回 `{"code":"...","confidence":...}`，随后随机生成 `PlayerNNNNNN` 用户名提交点赞表单。MineBBS ESA 只在显式启用 `MINEBBS_ESA_SLIDER_ENABLED` 后对 GET/HEAD 挑战启动 Chromium，读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的边界，并生成从成功人工样本归纳的约 465 ms 单调轨迹：前段 1 px 试探、平滑加速、约 7-10 px 向上漂移，并在末端继续拖过轨道后释放。每个点通过 `nodriver` 的低层 CDP `Input.dispatchMouseEvent` 发送，并按绝对单调时钟调度，避免浏览器协议调用开销逐点累积。只有挑战标记消失且浏览器正常清理后才同步 Cookie 和 User-Agent，并只重试一次原 GET/HEAD。ESA 路径不会向模型发送截图或其他数据，挑战 POST 不会重放。轨迹单元测试只能验证输入契约；ESA 是否放行必须以实时验证响应和挑战页面消失为准。
+WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只返回 `{"code":"...","confidence":...}`，随后随机生成 `PlayerNNNNNN` 用户名提交点赞表单。MineBBS ESA 只在显式启用 `MINEBBS_ESA_SLIDER_ENABLED` 后对 GET/HEAD 挑战启动 Chromium，读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的边界。输入先用约 1.2 秒的三阶 Bezier 曲线接近滑块，再按下并执行从成功人工样本缩放出的 61 帧、约 465 ms 拖动轨迹；全程只发送 `mouseMoved` 和一次 `mousePressed`，不发送 `mouseReleased`。每个点通过 `nodriver` 的低层 CDP `Input.dispatchMouseEvent` 发送，并按绝对单调时钟调度。只有滑块 DOM 消失、页面离开验证标题且浏览器正常清理后才同步 Cookie 和 User-Agent，并只重试一次原 GET/HEAD。ESA 路径不会向模型发送截图或其他数据，挑战 POST 不会重放。轨迹单元测试只能验证输入契约；ESA 是否放行仍以实时挑战页面消失为准。
 
 ## 挑战处理边界
 

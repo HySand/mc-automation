@@ -91,6 +91,7 @@ class FakeTab:
         self.fail_drag_move = fail_drag_move
         self.drag_moves = 0
         self.events: list[dict[str, Any]] = []
+        self.event_times_ms: list[int] = []
         self.selects: list[tuple[str, float]] = []
         self.evaluations: list[tuple[str, bool]] = []
 
@@ -109,6 +110,7 @@ class FakeTab:
 
     async def send(self, command: dict[str, Any]) -> None:
         self.events.append(command)
+        self.event_times_ms.append(0 if self.clock is None else self.clock.elapsed_ms)
         if command["type"] == "mouseMoved":
             if len(self.events) > 1:
                 self.drag_moves += 1
@@ -256,6 +258,13 @@ def configured_resolver(
     )
     monkeypatch.setattr(resolver, "_monotonic", clock.now)
     monkeypatch.setattr(resolver, "_sleep_ms", clock.sleep_ms)
+
+    async def wait_for_drag_deadline(drag_started: float, target_elapsed_ms: float) -> None:
+        remaining_ms = target_elapsed_ms - (clock.now() - drag_started) * 1000.0
+        if remaining_ms > 0:
+            await clock.sleep_ms(max(1, int(remaining_ms + 0.5)))
+
+    monkeypatch.setattr(resolver, "_wait_for_drag_deadline", wait_for_drag_deadline)
     return resolver
 
 
@@ -279,45 +288,40 @@ def test_resolver_refuses_to_nest_an_existing_event_loop() -> None:
     assert not asyncio.run(invoke())
 
 
-def test_esa_slider_defaults_match_the_successful_manual_trace_shape() -> None:
+def test_esa_slider_defaults_generate_a_dense_cubic_bezier_path() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(7))
 
-    assert resolver.drag_steps == 120
+    assert resolver.drag_steps == 61
     assert resolver.drag_duration_ms == 465
 
-    samples = resolver._humanized_drag_path(30.0, 40.0, 350.0)
+    samples = resolver._bezier_drag_path(30.0, 40.0, 350.0)
     x_steps = [samples[0][0] - 30.0] + [
         second[0] - first[0] for first, second in zip(samples, samples[1:], strict=False)
     ]
-    assert len(samples) == 61
-    assert x_steps[:6] == [0.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-    assert all(step > 0 for step in x_steps[1:])
-    assert samples[-2][0] > 350.0 + 320.0 * 0.35
-    assert 1.0 <= samples[-1][0] - samples[-2][0] <= 2.0
+    assert len(samples) == resolver.drag_steps
+    assert all(step > 0 for step in x_steps)
+    assert samples[-1][0] == 350.0
+    assert samples[-1][1] == 34.0
     assert all(first[0] <= second[0] for first, second in zip(samples, samples[1:], strict=False))
 
 
-def test_humanized_path_has_a_smooth_vertical_drift_without_jumps() -> None:
+def test_bezier_path_has_a_smooth_bounded_vertical_curve() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(19))
 
-    samples = resolver._humanized_drag_path(30.0, 40.0, 350.0)
+    samples = resolver._bezier_drag_path(30.0, 40.0, 350.0)
     offsets = [y - 40.0 for _x, y in samples]
 
-    assert offsets[0] == 0.0
-    assert -10.0 <= offsets[-1] <= -7.0
-    assert all(first >= second for first, second in zip(offsets, offsets[1:], strict=False))
+    assert all(-7.0 <= offset <= 0.0 for offset in offsets)
     assert (
         max(abs(second - first) for first, second in zip(offsets, offsets[1:], strict=False)) < 1.0
     )
 
 
-def test_humanized_path_is_reproducible_with_an_injected_random_source() -> None:
+def test_bezier_path_is_reproducible_with_an_injected_random_source() -> None:
     first = EsaSliderChallengeResolver(random_source=random.Random(23))
     second = EsaSliderChallengeResolver(random_source=random.Random(23))
 
-    assert first._humanized_drag_path(30.0, 40.0, 350.0) == second._humanized_drag_path(
-        30.0, 40.0, 350.0
-    )
+    assert first._bezier_drag_path(30.0, 40.0, 350.0) == second._bezier_drag_path(30.0, 40.0, 350.0)
 
 
 def test_humanized_deadlines_are_irregular_monotonic_and_bounded() -> None:
@@ -331,6 +335,41 @@ def test_humanized_deadlines_are_irregular_monotonic_and_bounded() -> None:
     assert deadlines[-1] == resolver.drag_duration_ms
     assert all(first < second for first, second in zip(deadlines, deadlines[1:], strict=False))
     assert max(intervals) - min(intervals) > 1.0
+
+
+def test_page_is_clear_when_passive_marker_remains_after_slider_navigation() -> None:
+    class NavigatedTab:
+        async def get_content(self) -> str:
+            return "<html><script>const passive = 'aliyunCaptcha';</script></html>"
+
+        async def evaluate(self, _script: str, *, return_by_value: bool) -> str:
+            assert return_by_value
+            return '{"slider":false,"title":"MineBBS 我的世界中文论坛"}'
+
+    assert asyncio.run(EsaSliderChallengeResolver._page_is_clear(NavigatedTab()))
+
+
+def test_page_is_not_clear_when_a_different_challenge_replaces_esa() -> None:
+    class DeniedTab:
+        async def get_content(self) -> str:
+            return "<title>Attention Required! | Cloudflare</title>"
+
+        async def evaluate(self, _script: str, *, return_by_value: bool) -> str:
+            raise AssertionError("non-ESA challenges must fail before DOM fallback")
+
+    assert not asyncio.run(EsaSliderChallengeResolver._page_is_clear(DeniedTab()))
+
+
+def test_manual_sample_profile_preserves_probe_frames_and_endpoint_jumps() -> None:
+    resolver = EsaSliderChallengeResolver()
+
+    progress = resolver._manual_sample_progress(61)
+    deadlines = resolver._humanized_drag_deadlines(61)
+
+    assert progress[:3] == pytest.approx([0.0, 1 / 441, 2 / 441])
+    assert progress[-3:] == pytest.approx([326 / 441, 440 / 441, 1.0])
+    assert deadlines[:3] == pytest.approx([7.0, 104.0, 108.0])
+    assert deadlines[-3:] == pytest.approx([340.0, 463.0, 465.0])
 
 
 def test_nodriver_resolver_uses_dom_geometry_and_copies_session(
@@ -353,43 +392,40 @@ def test_nodriver_resolver_uses_dom_geometry_and_copies_session(
     assert resolver.resolve("https://example.test/", session, (1, 1))
 
     events = nodriver.browser.tab.events
-    assert [event["type"] for event in events] == [
-        "mouseMoved",
+    assert [event["type"] for event in events[: resolver.APPROACH_STEPS]] == [
+        "mouseMoved"
+    ] * resolver.APPROACH_STEPS
+    assert [event["type"] for event in events[resolver.APPROACH_STEPS :]] == [
         "mousePressed",
         "mouseMoved",
         "mouseMoved",
         "mouseMoved",
         "mouseMoved",
-        "mouseReleased",
     ]
-    assert (events[0]["x"], events[0]["y"]) == (30.0, 40.0)
-    assert events[-2]["x"] == 190.0
-    assert (events[-1]["x"], events[-1]["y"]) == (events[-2]["x"], events[-2]["y"])
-    assert events[1]["button"] == FakeInput.MouseButton.LEFT
-    assert events[1]["buttons"] == 1
-    assert all(event["button"] == FakeInput.MouseButton.NONE for event in events[2:-1])
-    assert all(event["buttons"] == 1 for event in events[2:-1])
-    assert events[-1]["buttons"] == 0
-    drag_points = [(event["x"], event["y"]) for event in events[2:-1]]
-    assert all(30.0 <= x <= 190.0 for x, _y in drag_points)
-    assert all(30.0 <= y <= 40.0 for _x, y in drag_points)
-    assert (
-        resolver.PRE_PRESS_DELAY_RANGE_MS[0]
-        <= clock.sleeps[0]
-        <= resolver.PRE_PRESS_DELAY_RANGE_MS[1]
-    )
-    assert (
-        resolver.PRESS_SETTLE_DELAY_RANGE_MS[0]
-        <= clock.sleeps[1]
-        <= resolver.PRESS_SETTLE_DELAY_RANGE_MS[1]
-    )
-    movement_sleeps = clock.sleeps[2:-1]
+    press = events[resolver.APPROACH_STEPS]
+    approach = events[: resolver.APPROACH_STEPS]
+    held_moves = events[resolver.APPROACH_STEPS + 1 :]
+    press_x, press_y = press["x"], press["y"]
+    assert 18.8 <= press_x <= 41.2
+    assert 31.2 <= press_y <= 48.8
+    grab_offset_x = press_x - 10.0
+    clamp_end_x = 10.0 + 200.0 - 40.0 + grab_offset_x
+    assert clamp_end_x + 160.0 * 0.36 <= held_moves[-1]["x"] <= clamp_end_x + 160.0 * 0.40
+    assert press["button"] == FakeInput.MouseButton.LEFT
+    assert press["buttons"] == 1
+    assert approach[0]["x"] > press_x
+    assert approach[0]["y"] < press_y
+    assert (approach[-1]["x"], approach[-1]["y"]) == (press_x, press_y)
+    assert all(event["button"] == FakeInput.MouseButton.NONE for event in held_moves)
+    assert all(event["buttons"] == 1 for event in held_moves)
+    assert all(event["buttons"] == 0 for event in events[: resolver.APPROACH_STEPS])
+    drag_points = [(event["x"], event["y"]) for event in held_moves]
+    assert all(press_x <= x <= clamp_end_x + 160.0 * 0.40 for x, _y in drag_points)
+    assert all(press_y - 10.0 <= y <= press_y for _x, y in drag_points)
+    movement_sleeps = clock.sleeps[-resolver.drag_steps :]
     assert len(movement_sleeps) == resolver.drag_steps
     assert sum(movement_sleeps) == resolver.drag_duration_ms
     assert len(set(movement_sleeps)) > 1
-    assert (
-        resolver.RELEASE_DELAY_RANGE_MS[0] <= clock.sleeps[-1] <= resolver.RELEASE_DELAY_RANGE_MS[1]
-    )
     assert nodriver.browser.tab.selects == [
         (resolver.HANDLE_SELECTOR, 1),
         (resolver.TRACK_SELECTOR, 1),
@@ -401,7 +437,7 @@ def test_nodriver_resolver_uses_dom_geometry_and_copies_session(
     assert profile.is_absolute()
     assert profile.name.startswith("mc-automation-esa-browser-")
     assert nodriver.browser.cookies.received[0]["name"] == "existing"
-    assert nodriver.browser.tab.evaluations == [("navigator.userAgent", True)]
+    assert nodriver.browser.tab.evaluations[-1] == ("navigator.userAgent", True)
     assert session.cookies.get("esa_clearance", domain="example.test") == "ok"
     assert session.headers["User-Agent"] == "esa-nodriver"
     assert nodriver.browser.stopped
@@ -421,25 +457,45 @@ def test_nodriver_drag_schedule_subtracts_cdp_call_overhead(
 
     assert resolver.resolve("https://example.test/", requests.Session(), (1, 1))
 
-    assert (
-        resolver.PRE_PRESS_DELAY_RANGE_MS[0]
-        <= clock.sleeps[0]
-        <= resolver.PRE_PRESS_DELAY_RANGE_MS[1]
-    )
-    assert (
-        resolver.PRESS_SETTLE_DELAY_RANGE_MS[0]
-        <= clock.sleeps[1]
-        <= resolver.PRESS_SETTLE_DELAY_RANGE_MS[1]
-    )
-    movement_sleeps = clock.sleeps[2:-1]
+    movement_sleeps = clock.sleeps[-resolver.drag_steps :]
     assert len(movement_sleeps) == resolver.drag_steps
-    assert sum(movement_sleeps) + resolver.drag_steps * 3 == resolver.drag_duration_ms
-    assert (
-        resolver.RELEASE_DELAY_RANGE_MS[0] <= clock.sleeps[-1] <= resolver.RELEASE_DELAY_RANGE_MS[1]
+    assert sum(movement_sleeps) + (resolver.drag_steps - 1) * 3 == resolver.drag_duration_ms
+    assert clock.elapsed_ms >= resolver.APPROACH_DURATION_MS + resolver.drag_duration_ms + 3
+
+
+def test_nodriver_sends_each_move_only_after_its_absolute_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = FakeClock()
+    nodriver = install_fake_nodriver(
+        monkeypatch,
+        FakePosition(x=10, y=20, width=40, height=40),
+        clock=clock,
+        move_cost_ms=3,
     )
-    assert clock.elapsed_ms == (
-        3 + clock.sleeps[0] + clock.sleeps[1] + resolver.drag_duration_ms + clock.sleeps[-1]
+    resolver = configured_resolver(monkeypatch, clock)
+    deadlines = [5.0, 18.0, 29.0, 40.0]
+    monkeypatch.setattr(
+        resolver,
+        "_humanized_drag_deadlines",
+        lambda _point_count, *, duration_ms: deadlines,
     )
+
+    assert resolver.resolve("https://example.test/", requests.Session(), (1, 1))
+
+    drag_started_ms = nodriver.browser.tab.event_times_ms[resolver.APPROACH_STEPS]
+    move_times = [
+        sent_at - drag_started_ms
+        for event, sent_at in zip(
+            nodriver.browser.tab.events,
+            nodriver.browser.tab.event_times_ms,
+            strict=True,
+        )
+        if event["type"] == "mouseMoved" and event["buttons"] == 1
+    ]
+    assert move_times == [5, 18, 29, 40]
+    assert all(sent_at >= deadline for sent_at, deadline in zip(move_times, deadlines, strict=True))
+    assert clock.elapsed_ms == drag_started_ms + deadlines[-1] + 3
 
 
 def test_nodriver_resolver_fails_closed_without_slider_geometry(
@@ -489,7 +545,7 @@ def test_nodriver_resolver_does_not_sync_a_failed_drag(
     assert nodriver.browser.stopped
 
 
-def test_nodriver_releases_mouse_and_closes_browser_when_cdp_move_fails(
+def test_nodriver_closes_browser_without_injecting_other_events_when_move_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = FakeClock()
@@ -503,7 +559,10 @@ def test_nodriver_releases_mouse_and_closes_browser_when_cdp_move_fails(
 
     assert not resolver.resolve("https://example.test/", requests.Session(), (1, 1))
 
-    assert nodriver.browser.tab.events[-1]["type"] == "mouseReleased"
+    assert {event["type"] for event in nodriver.browser.tab.events} <= {
+        "mousePressed",
+        "mouseMoved",
+    }
     assert nodriver.browser.stopped
 
 

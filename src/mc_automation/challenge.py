@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import importlib
 import inspect
+import json
 import os
 import random
 import shutil
@@ -25,16 +26,144 @@ class EsaSliderChallengeResolver:
 
     HANDLE_SELECTOR = "#aliyunCaptcha-sliding-slider"
     TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"
-    PRE_PRESS_DELAY_RANGE_MS = (90, 190)
-    PRESS_SETTLE_DELAY_RANGE_MS = (4, 10)
-    RELEASE_DELAY_RANGE_MS = (15, 30)
+    HORIZONTAL_GRAB_RANGE = (0.22, 0.78)
+    VERTICAL_GRAB_RANGE = (0.28, 0.72)
+    END_OVERSHOOT_RANGE = (0.36, 0.40)
+    APPROACH_STEPS = 232
+    APPROACH_DURATION_MS = 1196
+    MANUAL_X_PROGRESS = (
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        11,
+        13,
+        17,
+        22,
+        27,
+        31,
+        34,
+        39,
+        45,
+        50,
+        58,
+        64,
+        71,
+        77,
+        84,
+        93,
+        100,
+        107,
+        113,
+        120,
+        127,
+        134,
+        143,
+        149,
+        155,
+        162,
+        168,
+        174,
+        181,
+        185,
+        192,
+        197,
+        203,
+        210,
+        217,
+        223,
+        229,
+        236,
+        243,
+        251,
+        258,
+        265,
+        273,
+        280,
+        287,
+        295,
+        302,
+        308,
+        315,
+        321,
+        326,
+        440,
+        441,
+    )
+    MANUAL_DEADLINES_MS = (
+        7,
+        104,
+        108,
+        112,
+        116,
+        119,
+        124,
+        128,
+        132,
+        136,
+        140,
+        144,
+        149,
+        153,
+        157,
+        161,
+        165,
+        169,
+        173,
+        178,
+        182,
+        186,
+        190,
+        194,
+        199,
+        203,
+        207,
+        211,
+        215,
+        219,
+        224,
+        228,
+        232,
+        236,
+        240,
+        244,
+        248,
+        253,
+        257,
+        261,
+        265,
+        269,
+        274,
+        278,
+        282,
+        286,
+        290,
+        294,
+        299,
+        303,
+        307,
+        311,
+        315,
+        319,
+        323,
+        328,
+        332,
+        336,
+        340,
+        463,
+        465,
+    )
     BROWSER_CLEANUP_TIMEOUT_SECONDS = 5.0
 
     def __init__(
         self,
         *,
         wait_seconds: float = 15.0,
-        drag_steps: int = 120,
+        drag_steps: int = 61,
         drag_duration_ms: int = 465,
         headless: bool = False,
         browser_executable_path: str | Path | None = None,
@@ -267,32 +396,60 @@ class EsaSliderChallengeResolver:
         if handle_width <= 0 or handle_height <= 0 or track_width <= handle_width:
             return False
 
-        start_x = float(handle_position.x) + handle_width / 2
-        start_y = float(handle_position.y) + handle_height / 2
-        end_x = float(track_position.x) + track_width - handle_width / 2
-        if end_x <= start_x:
+        grab_offset_x = handle_width * self._random.uniform(*self.HORIZONTAL_GRAB_RANGE)
+        grab_offset_y = handle_height * self._random.uniform(*self.VERTICAL_GRAB_RANGE)
+        start_x = float(handle_position.x) + grab_offset_x
+        start_y = float(handle_position.y) + grab_offset_y
+        clamp_end_x = float(track_position.x) + track_width - handle_width + grab_offset_x
+        if clamp_end_x <= start_x:
             return False
 
-        drag_path = self._humanized_drag_path(start_x, start_y, end_x)
-        drag_deadlines = self._humanized_drag_deadlines(len(drag_path))
+        distance = clamp_end_x - start_x
+        overshoot = distance * self._random.uniform(*self.END_OVERSHOOT_RANGE)
+        point_count = self._randomized_drag_steps()
+        duration_ms = self._randomized_drag_duration(point_count)
+        progress_values = self._manual_sample_progress(point_count)
+        drag_path = self._bezier_drag_path(
+            start_x,
+            start_y,
+            clamp_end_x + overshoot,
+            point_count=point_count,
+            vertical_radius=min(8.0, max(2.0, handle_height * 0.15)),
+            progress_values=progress_values,
+        )
+        drag_deadlines = self._humanized_drag_deadlines(len(drag_path), duration_ms=duration_ms)
         log_step(
             "esa_drag",
             site="minebbs",
             status="started",
             path_points=len(drag_path),
-            duration_ms=self.drag_duration_ms,
-            distance=round(end_x - start_x, 2),
+            duration_ms=duration_ms,
+            distance=round(distance, 2),
         )
-        await self._dispatch_mouse_event(
-            tab,
-            cdp,
-            "mouseMoved",
+        approach_path = self._bezier_drag_path(
+            start_x + track_width * 1.35,
+            start_y - handle_height * 2.7,
             start_x,
-            start_y,
-            button=cdp.input_.MouseButton.NONE,
-            buttons=0,
+            end_y=start_y,
+            point_count=self.APPROACH_STEPS,
+            vertical_radius=handle_height,
         )
-        await self._sleep_ms(self._random.randint(*self.PRE_PRESS_DELAY_RANGE_MS))
+        approach_started = self._monotonic()
+        for step, (x, y) in enumerate(approach_path, 1):
+            await self._wait_for_drag_deadline(
+                approach_started,
+                self.APPROACH_DURATION_MS * step / len(approach_path),
+            )
+            await self._dispatch_mouse_event(
+                tab,
+                cdp,
+                "mouseMoved",
+                x,
+                y,
+                button=cdp.input_.MouseButton.NONE,
+                buttons=0,
+            )
+
         await self._dispatch_mouse_event(
             tab,
             cdp,
@@ -303,49 +460,40 @@ class EsaSliderChallengeResolver:
             buttons=1,
             click_count=1,
         )
-        try:
-            await self._sleep_ms(self._random.randint(*self.PRESS_SETTLE_DELAY_RANGE_MS))
-            # Schedule every point against one monotonic deadline. CDP round-trip latency
-            # consumes the movement budget instead of stretching it once per point.
-            drag_started = self._monotonic()
-            for step, (x, y) in enumerate(drag_path, 1):
-                await self._dispatch_mouse_event(
-                    tab,
-                    cdp,
-                    "mouseMoved",
-                    x,
-                    y,
-                    # Native mousemove reports no transition button while the buttons
-                    # bitmask carries the held left button.
-                    button=cdp.input_.MouseButton.NONE,
-                    buttons=1,
-                )
-                target_elapsed_ms = drag_deadlines[step - 1]
-                remaining_ms = target_elapsed_ms - (self._monotonic() - drag_started) * 1000.0
-                if remaining_ms > 0:
-                    await self._sleep_ms(max(1, int(remaining_ms + 0.5)))
-            await self._sleep_ms(self._random.randint(*self.RELEASE_DELAY_RANGE_MS))
-        finally:
-            release_x, release_y = drag_path[-1]
+        drag_started = self._monotonic()
+        # Schedule every held point against the successful manual trace. Waiting for
+        # each acknowledgement prevents Chromium from coalescing several CDP moves.
+        for step, (x, y) in enumerate(drag_path, 1):
+            target_elapsed_ms = drag_deadlines[step - 1]
+            await self._wait_for_drag_deadline(drag_started, target_elapsed_ms)
             await self._dispatch_mouse_event(
                 tab,
                 cdp,
-                "mouseReleased",
-                release_x,
-                release_y,
-                button=cdp.input_.MouseButton.LEFT,
-                buttons=0,
-                click_count=1,
+                "mouseMoved",
+                x,
+                y,
+                button=cdp.input_.MouseButton.NONE,
+                buttons=1,
             )
         log_step(
             "esa_drag",
             site="minebbs",
             status="completed",
             path_points=len(drag_path),
-            duration_ms=self.drag_duration_ms,
-            distance=round(end_x - start_x, 2),
+            duration_ms=duration_ms,
+            distance=round(distance, 2),
         )
         return True
+
+    async def _wait_for_drag_deadline(self, drag_started: float, target_elapsed_ms: float) -> None:
+        deadline = drag_started + target_elapsed_ms / 1000.0
+        remaining = deadline - self._monotonic()
+        if remaining > 0.012:
+            await asyncio.sleep(remaining - 0.006)
+        # Windows' default asyncio timer commonly rounds 3-5 ms waits into 15.6 ms
+        # batches. A short bounded spin preserves the sampled event cadence.
+        while self._monotonic() < deadline:
+            pass
 
     async def _dispatch_mouse_event(
         self,
@@ -408,78 +556,112 @@ class EsaSliderChallengeResolver:
                 return str(candidate_path)
         return None
 
-    def _humanized_drag_path(
+    def _bezier_drag_path(
         self,
         start_x: float,
         start_y: float,
         end_x: float,
+        *,
+        point_count: int | None = None,
+        vertical_radius: float = 4.0,
+        progress_values: Sequence[float] | None = None,
+        end_y: float | None = None,
     ) -> list[tuple[float, float]]:
-        """Build a path shaped from the successful manual drag sample."""
+        """Build a monotonic cubic Bezier path between the sampled pointer positions."""
 
         distance = end_x - start_x
-        if distance <= 0:
+        if distance == 0:
             return [(end_x, start_y)]
+        samples = max(1, self.drag_steps if point_count is None else point_count)
+        radius = max(0.0, vertical_radius)
 
-        if self.drag_steps < 8:
-            x_positions = [
-                start_x + distance * step / self.drag_steps
-                for step in range(1, self.drag_steps + 1)
-            ]
+        if end_y is None:
+            resolved_end_y = start_y - radius * 1.5
+            control_1_y = start_y - radius * 2.28
+            control_2_y = start_y - radius * 1.01
         else:
-            sample_count = min(self.drag_steps, max(8, round(distance / 5.25)))
-            probe_count = max(3, round(sample_count * 0.1))
-            regular_count = sample_count - probe_count - 2
-            regular_end = start_x + distance * self._random.uniform(1.01, 1.03)
-            probe_positions = [start_x + index for index in range(probe_count)]
+            resolved_end_y = end_y
+            control_1_y = start_y + (resolved_end_y - start_y) * 0.25
+            control_2_y = resolved_end_y - radius * 0.25
+        control_1 = (start_x + distance / 3.0, control_1_y)
+        control_2 = (start_x + distance * 2.0 / 3.0, control_2_y)
 
-            ramp_count = max(3, round(regular_count * 0.35))
-            weights: list[float] = []
-            for index in range(regular_count):
-                if index < ramp_count:
-                    progress = index / max(1, ramp_count - 1)
-                    weight = 2.0 + 5.0 * progress
-                else:
-                    weight = self._random.uniform(5.5, 8.0)
-                weights.append(weight)
-            scale = (regular_end - probe_positions[-1]) / sum(weights)
-            x_positions = list(probe_positions)
-            current_x = probe_positions[-1]
-            for weight in weights:
-                current_x += weight * scale
-                x_positions.append(current_x)
-
-            overshoot = distance * self._random.uniform(0.35, 0.40)
-            x_positions.extend((end_x + overshoot, end_x + overshoot + self._random.uniform(1, 2)))
-
-        drift = -self._random.uniform(7.0, 10.0)
         path: list[tuple[float, float]] = []
-        for index, x in enumerate(x_positions):
-            progress = index / max(1, len(x_positions) - 1)
-            y = start_y + drift * min(1.0, progress * 1.8) ** 0.8
+        progress = progress_values or tuple(step / samples for step in range(1, samples + 1))
+        if len(progress) != samples:
+            raise ValueError("progress_values must match point_count")
+        for t in progress:
+            inverse = 1.0 - t
+            x = (
+                inverse**3 * start_x
+                + 3 * inverse**2 * t * control_1[0]
+                + 3 * inverse * t**2 * control_2[0]
+                + t**3 * end_x
+            )
+            y = (
+                inverse**3 * start_y
+                + 3 * inverse**2 * t * control_1[1]
+                + 3 * inverse * t**2 * control_2[1]
+                + t**3 * resolved_end_y
+            )
             path.append((x, y))
         return path
 
-    def _humanized_drag_deadlines(self, point_count: int) -> list[float]:
+    def _randomized_drag_steps(self) -> int:
+        return self.drag_steps
+
+    def _randomized_drag_duration(self, point_count: int) -> int:
+        return max(point_count, self.drag_duration_ms)
+
+    @classmethod
+    def _manual_sample_progress(cls, point_count: int) -> list[float]:
+        return cls._interpolate_profile(
+            tuple(value / cls.MANUAL_X_PROGRESS[-1] for value in cls.MANUAL_X_PROGRESS),
+            point_count,
+        )
+
+    @staticmethod
+    def _interpolate_profile(profile: Sequence[float], point_count: int) -> list[float]:
+        if point_count <= 0:
+            return []
+        if point_count == 1:
+            return [float(profile[-1])]
+        if point_count == len(profile):
+            return [float(value) for value in profile]
+        last_index = len(profile) - 1
+        values: list[float] = []
+        for index in range(point_count):
+            position = index * last_index / (point_count - 1)
+            lower = int(position)
+            upper = min(last_index, lower + 1)
+            fraction = position - lower
+            values.append(float(profile[lower] + (profile[upper] - profile[lower]) * fraction))
+        return values
+
+    def _humanized_drag_deadlines(
+        self, point_count: int, *, duration_ms: int | None = None
+    ) -> list[float]:
         """Return irregular absolute deadlines that still end at the configured budget."""
 
         if point_count <= 0:
             return []
+        total_duration = self.drag_duration_ms if duration_ms is None else duration_ms
         if point_count < 8:
             intervals = [self._random.uniform(0.72, 1.28) for _index in range(point_count)]
-        else:
-            intervals = [self._random.uniform(4.0, 10.0)]
-            intervals.append(self._random.uniform(80.0, 110.0))
-            intervals.extend(self._random.uniform(3.0, 6.0) for _index in range(point_count - 4))
-            intervals.append(self._random.uniform(90.0, 130.0))
-            intervals.append(self._random.uniform(2.0, 5.0))
-        total = sum(intervals)
-        elapsed = 0.0
-        deadlines: list[float] = []
-        for interval in intervals:
-            elapsed += self.drag_duration_ms * interval / total
-            deadlines.append(elapsed)
-        deadlines[-1] = float(self.drag_duration_ms)
-        return deadlines
+            total = sum(intervals)
+            elapsed = 0.0
+            deadlines: list[float] = []
+            for interval in intervals:
+                elapsed += total_duration * interval / total
+                deadlines.append(elapsed)
+            deadlines[-1] = float(total_duration)
+            return deadlines
+        normalized = tuple(
+            value / self.MANUAL_DEADLINES_MS[-1] for value in self.MANUAL_DEADLINES_MS
+        )
+        return [
+            value * total_duration for value in self._interpolate_profile(normalized, point_count)
+        ]
 
     async def _wait_until_clear(self, tab: Any) -> bool:
         deadline = self._monotonic() + self.wait_seconds
@@ -491,9 +673,26 @@ class EsaSliderChallengeResolver:
                 return False
             await self._sleep_ms(min(500, max(1, int(remaining * 1000))))
 
-    @staticmethod
-    async def _page_is_clear(tab: Any) -> bool:
-        return detect_security_challenge(200, await tab.get_content()) is None
+    @classmethod
+    async def _page_is_clear(cls, tab: Any) -> bool:
+        challenge = detect_security_challenge(200, await tab.get_content())
+        if challenge is None:
+            return True
+        if challenge != "security challenge marker: aliyunCaptcha":
+            return False
+        state = await tab.evaluate(
+            f"JSON.stringify({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r}),"
+            "title:document.title}})",
+            return_by_value=True,
+        )
+        if not isinstance(state, str):
+            return False
+        try:
+            parsed = json.loads(state)
+        except (TypeError, ValueError):
+            return False
+        title = str(parsed.get("title", ""))
+        return not bool(parsed.get("slider")) and "滑动验证页面" not in title
 
     @staticmethod
     def _request_cookies(session: requests.Session, url: str, cdp: Any) -> list[Any]:

@@ -106,10 +106,14 @@ GitHub schedule/manual trigger
 - `MINEBBS_ESA_SLIDER_ENABLED` is an explicit opt-in and is valid only when MineBBS is enabled.
 - The resolver launches visible Chromium through `nodriver`, reuses request-session cookies, and locates
   `#aliyunCaptcha-sliding-slider` plus `#aliyunCaptcha-sliding-wrapper` after the page renders.
-- Drag coordinates come only from the handle and track bounding boxes. The path shape is derived
-  from a successful physical-mouse sample: an initial 1 px probe, monotonic X acceleration, smooth
-  7-10 px upward drift, and release after carrying the pointer beyond the clamped track endpoint.
-  Tests inject a seeded random source while production uses local entropy. Each
+- Drag coordinates come only from the handle and track bounding boxes. A 232-point cubic Bezier
+  approach first supplies the pointer history ESA evaluates before `mousedown`; the held path is a
+  61-point cubic Bezier curve scaled from the successful manual sample. Its
+  press point is sampled within the handle, and its actual grab offset determines the clamp
+  coordinate. The final point crosses that boundary by 36-40% of effective travel.
+  The input sequence contains unheld `mouseMoved` approach events, one `mousePressed`, and held
+  `mouseMoved` events; it does not inject a release. Tests inject a seeded random source while
+  production uses local entropy. Each
   sample is scheduled against one absolute monotonic timeline so synchronous or CDP call cost is
   deducted from the remaining wait instead of extending the total drag. No screenshot, model
   request, coordinate guess, extension, or fabricated verification token is used.
@@ -118,7 +122,8 @@ GitHub schedule/manual trigger
   HTTP `Success=true` with `Result.VerifyResult=false` remains an unresolved challenge.
 - Live acceptance is not inferred from path-shape tests or a hidden slider. A focused Windows
   `SendInput` replay can produce trusted DOM events, hide the control, and still receive
-  `VerifyResult=false`; only disappearance of the challenge page establishes clearance.
+  `VerifyResult=false`; only disappearance of the challenge page establishes clearance. A live
+  public probe proved that preserving the pre-press approach history clears the same challenge.
 - Cookies and browser User-Agent are synchronized only after challenge markers disappear, then the
   transport retries the original GET/HEAD once. Missing geometry, invalid dimensions, unavailable
   `nodriver`/Chromium, failed verification, and all challenged POST requests remain `manual_intervention`.

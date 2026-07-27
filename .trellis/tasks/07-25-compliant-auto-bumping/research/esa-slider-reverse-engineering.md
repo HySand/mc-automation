@@ -27,10 +27,11 @@ payloads, raw authenticated HTML, or verification codes are recorded here.
   Observed names include `sg.002`, `sg.004`, `sg.011`, `sg.016`, `sg.017`, `sg.029`, `sg.040`,
   `sg.041`, and `sg.046`.  The implementation therefore relies only on the fixed DOM selectors.
 - The stable FeiLin bundle contains an explicitly named `selenuimWebdriver` device-detection
-  routine.  Together with the observed `navigator.webdriver=true`, `plugins=5`, and
-  `chrome.runtime=false` in the visible automated Chromium session, this is a concrete risk-signal
-  hypothesis.  The probe does not claim that this is the sole scoring input; it only separates a
-  browser/device decision from a coordinate or endpoint defect.
+  routine. An older automated Chromium probe reported `navigator.webdriver=true`; the current
+  `nodriver==0.50.3` Edge probe reports `navigator.webdriver=false`, `plugins=5`, normal language
+  values, and a regular Edge user agent while ESA still returns `VerifyResult=false`. The single
+  webdriver flag is therefore not a sufficient explanation; broader browser/session or injected
+  event provenance remains the concrete risk-signal hypothesis.
 
 ### Event data visible to the page
 
@@ -205,3 +206,88 @@ Date: 2026-07-26
 - UI state such as a hidden control is not equivalent to server-side authorization or clearance.
 - Repeated parameter tuning should stop once a discriminating live probe rejects the same accepted
   sample through multiple injected-input layers.
+
+## Expanded trajectory and session matrix
+
+Date: 2026-07-27
+
+- Seven visible CDP probes covered 60-190 movement points, 360-1250 ms total duration, and
+  slow-start, balanced, and fast-start/slow-end cubic Bezier controls. Every probe emitted exactly
+  one verification request and received `Success=true` with `Result.VerifyResult=false`.
+- Press positions were randomized inside the handle, clamp coordinates preserved the actual grab
+  offset, and endpoint overshoot varied from 4-18%. Three further samples were rejected.
+- An A/B comparison with and without `mouseReleased` produced the same single verification request
+  and the same rejection. The page therefore submits before or independently of release for this
+  challenge version.
+- Reusing one temporary Edge profile for a second launch and warming a fresh profile by visiting a
+  public MineBBS page did not change the result. Both reused-profile rounds exposed
+  `navigator.webdriver=false`, `plugins=5`, normal language values, and the regular Edge UA.
+- At the same time, the persistent in-app browser session displayed the normal MineBBS homepage on
+  the same machine/network while each fresh controlled Edge session received the ESA challenge.
+  This is consistent with a broader session/browser-control reputation difference rather than a
+  remaining endpoint, density, duration, release, or Bezier-shape defect.
+
+## Pre-press pointer-history root cause and successful production probe
+
+Date: 2026-07-27
+
+- The earlier scheduling loop sent each move before waiting for that move's deadline. Correcting it
+  proved the long 97 ms pause belonged before the second move, not the third, but the held-only
+  sequence still returned `VerifyResult=false`.
+- The accepted physical sample contained 253 `mousemove` events before `mousedown`. Its final
+  approach segment lasted about 1.2 seconds over 232 events and crossed roughly 488 px horizontally
+  and 107 px vertically before ending on the handle. Every rejected automated path began directly
+  with `mousePressed`, so ESA never received equivalent pre-press pointer history.
+- Replaying the complete approach plus held drag through the legacy Windows mouse API changed the
+  page title to `MineBBS 我的世界中文论坛`, removed the slider DOM, and navigated away from the
+  verification page. Replaying only the held portion through the same API returned
+  `VerifyResult=false`. This isolates the pre-press history as the decisive input difference; OS
+  input provenance is not required.
+- Production now generates a DOM-scaled cubic Bezier approach, then one `mousePressed`, then the
+  61-point cubic Bezier held path derived from the successful sample. It sends no release event,
+  changes no browser fingerprint, and fabricates no token.
+- A final public GET through the complete `EsaSliderChallengeResolver` returned `resolve=True`.
+  The slider DOM disappeared, the normal page session supplied cookies, and the browser User-Agent
+  synchronized into the request session after cleanup.
+- Normal MineBBS HTML can retain passive `aliyunCaptcha` script text after navigation. Clearance is
+  therefore established by absent slider DOM plus a non-verification title, not by scanning that
+  passive string alone.
+
+## Bug Analysis: Held-only tests omitted the input-history window
+
+### 1. Root Cause Category
+
+- **Category D/E - Test coverage gap and implicit assumption.** The implementation and tests treated
+  `mousedown` as the start of the ESA input contract even though the provider records pointer motion
+  before the press. The accepted trace already contained the missing evidence, but analysis sliced it
+  at the press boundary.
+
+### 2. Why fixes failed
+
+1. Bezier controls, duration, density, endpoint, and button semantics only changed the held segment.
+2. CDP and two native-input APIs replayed the same incomplete segment, so changing the delivery layer
+   could not supply the missing history.
+3. Unit tests asserted realistic held geometry but had no assertion for an approach ending exactly at
+   the sampled press point.
+
+### 3. Prevention mechanisms
+
+| Priority | Mechanism | Specific action | Status |
+|---|---|---|---|
+| P0 | Integration evidence | Require slider DOM disappearance and normal-page navigation | Done |
+| P0 | Test coverage | Assert unheld Bezier approach, exact press landing, and held-only ordering | Done |
+| P1 | Fail-closed detection | Permit only passive `aliyunCaptcha` text to use the DOM/title clearance check | Done |
+| P1 | Documentation | Define the complete input contract from approach through held drag | Done |
+
+### 4. Systematic expansion
+
+- Browser challenges may score event history before the visible interaction starts. Diagnostic traces
+  must preserve the full observation window, not only the obvious gesture slice.
+- Replaying the same incomplete sample through multiple input APIs is not discriminating evidence.
+  Compare the full accepted and rejected event streams before changing delivery technology.
+
+### 5. Knowledge capture
+
+- [x] Update the backend site-automation contract.
+- [x] Add approach and replacement-challenge regression tests.
+- [x] Record the positive live production result alongside historical negative probes.

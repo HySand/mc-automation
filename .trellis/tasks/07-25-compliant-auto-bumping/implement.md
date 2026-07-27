@@ -193,11 +193,10 @@ python -m pytest --cov=mc_automation --cov-report=term-missing
 
 ### 13.3 Humanized Alibaba drag profile
 
-- [x] Capture a sanitized successful physical-mouse sample and replace the speculative four-stage
-  profile with its observed shape: about 465 ms, 61 moves, monotonic X, smooth upward drift, and an
-  intentional release beyond the clamped track endpoint.
-- [x] Inject a seeded random source in tests and cover probe shape, monotonic movement, bounded
-  vertical drift, endpoint overshoot, reproducibility, event order, and CDP failure cleanup.
+- [x] Generate a cubic Bezier curve from live DOM geometry with two bounded entropy-derived control
+  points, monotonic X, smooth Y deviation, and an exact track endpoint.
+- [x] Inject a seeded random source in tests and cover Bezier geometry, monotonic movement, bounded
+  vertical deviation, reproducibility, the pressed/moved-only event contract, and cleanup failures.
 
 ### 13.4 Manual-vs-CDP behavior correction
 
@@ -205,8 +204,8 @@ python -m pytest --cov=mc_automation --cov-report=term-missing
   the automated CDP drag is rejected.
 - [x] Match native held-move semantics with `button=none, buttons=1` instead of reporting a left
   transition button on every frame.
-- [x] Randomize absolute movement deadlines without exceeding the configured drag budget and release
-  immediately at the endpoint instead of adding a 180 ms stationary hold.
+- [x] Randomize absolute movement deadlines without exceeding the configured drag budget and emit
+  only one `mousePressed` followed by held `mouseMoved` events.
 
 ### 13.5 Native-input discriminating probe
 
@@ -218,6 +217,15 @@ python -m pytest --cov=mc_automation --cov-report=term-missing
 - [x] Capture only non-secret verification result fields. Both valid native-input probes issued one
   verify request and returned `Success=true`, `VerifyResult=false`; do not integrate this known-failing
   input route into the production resolver or continue tuning numeric path parameters.
+
+### 13.6 Pre-press pointer-history correction
+
+- [x] Compare the rejected held-only replays with the full successful manual trace and identify the
+  missing 232-event approach segment before `mousedown`.
+- [x] Add a DOM-scaled cubic Bezier approach before the successful-sample-shaped held drag while
+  preserving the mouse-move/press-only event contract.
+- [x] Verify the complete production resolver on the public MineBBS challenge: `resolve=True`,
+  normal page title, absent slider DOM, and successful Cookie/User-Agent synchronization.
 
 ## 14. Complete redacted step logging
 
