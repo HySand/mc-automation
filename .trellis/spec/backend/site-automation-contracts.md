@@ -31,6 +31,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   consume AI endpoint, key, model, prompt, or screenshot data.
 - Optional `MINEBBS_BROWSER_EXECUTABLE_PATH` points to an existing Chromium-family browser executable when
   `nodriver` cannot auto-discover one. An empty value leaves discovery to `nodriver`.
+- GitHub Actions resolves an empty browser path before execution, preferring `google-chrome`, then
+  `google-chrome-stable`, `chromium-browser`, and `chromium`, and exports the resolved executable
+  through `GITHUB_ENV`. This avoids nodriver selecting an unusable Snap wrapper such as
+  `/bin/chromium` on hosted Ubuntu runners.
 - On Windows, if the default Chrome/Chromium discovery raises `FileNotFoundError`, the resolver may
   retry browser startup once with an installed Microsoft Edge executable. This is browser selection,
   not a second ESA challenge attempt; if no fallback exists, the resolver returns `False`.

@@ -46,7 +46,7 @@
 | `PAID_BUMP_COOLDOWN_SECONDS` | `3600` | KLPBBS 付费顶贴冷却 |
 | `MINEBBS_BUMP_INTERVAL_HOURS` | `16` | MineBBS 顶贴间隔 |
 | `MINEBBS_ESA_SLIDER_ENABLED` | `false` | 启用基于 `nodriver` DOM 几何的 MineBBS ESA 非 AI 滑块处理 |
-| `MINEBBS_BROWSER_EXECUTABLE_PATH` | 空 | 可选 Chromium-family 浏览器路径；空值由 `nodriver` 自动查找，Windows 无 Chrome 时再尝试系统 Edge |
+| `MINEBBS_BROWSER_EXECUTABLE_PATH` | 空 | 可选 Chromium-family 浏览器路径；Actions 空值时优先选择 `google-chrome`，本地空值由 `nodriver` 自动查找，Windows 无 Chrome 时再尝试系统 Edge |
 | `AI_SOLVER_ENABLED` | `false` | 启用 WDSJFWQ 图片验证码 AI 处理 |
 | `AI_SOLVER_MODEL` | 空 | 视觉模型名称，例如 `gpt-4o-mini` 或兼容服务提供的模型名 |
 | `AI_SOLVER_TIMEOUT_SECONDS` | `60` | 单次模型请求超时 |

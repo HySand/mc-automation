@@ -241,6 +241,10 @@ def test_browser_extra_and_workflow_use_nodriver() -> None:
     assert legacy_browser_command not in workflow.casefold()
     assert "MINEBBS_ESA_SLIDER_ENABLED" in workflow
     assert "MINEBBS_BROWSER_EXECUTABLE_PATH" in workflow
+    assert (
+        "for candidate in google-chrome google-chrome-stable chromium-browser chromium" in workflow
+    )
+    assert 'echo "MINEBBS_BROWSER_EXECUTABLE_PATH=$browser_path" >> "$GITHUB_ENV"' in workflow
     assert "mc-automation-${{ matrix.site }}-state-v3-${{ github.run_id }}" in workflow
     assert "Clear legacy MineBBS ESA suspension" not in workflow
     assert "challenge_count" not in workflow
