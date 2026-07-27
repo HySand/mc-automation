@@ -438,6 +438,117 @@ def test_browser_transport_retries_safe_methods_but_never_replays_post(
     assert calls == ["POST"]
 
 
+def test_browser_get_refetch_rejects_a_403_before_business_parsing() -> None:
+    class BrowserPage:
+        url = "https://www.minebbs.com/login/"
+        frames: list[object] = []
+
+        async def goto(self, *_args: object, **_kwargs: object) -> object:
+            return object()
+
+        async def wait_for_timeout(self, _milliseconds: int) -> None:
+            return None
+
+        async def content(self) -> str:
+            return "<html><body>normal-looking shell</body></html>"
+
+        async def evaluate(
+            self, script: str, payload: dict[str, object] | None = None
+        ) -> dict[str, object]:
+            if payload is not None:
+                return {
+                    "status": 403,
+                    "url": self.url,
+                    "headers": {"content-type": "text/html"},
+                    "text": "access denied",
+                }
+            if "containerCount" in script:
+                return {
+                    "href": self.url,
+                    "readyState": "complete",
+                    "hasBody": True,
+                    "containerCount": 0,
+                    "descendantCount": 0,
+                    "markerNames": [],
+                }
+            return {
+                "slider": False,
+                "title": "登录 | MineBBS 我的世界中文论坛",
+                "href": self.url,
+                "readyState": "complete",
+                "hasBody": True,
+            }
+
+    response = asyncio.run(
+        EsaSliderChallengeResolver()._browser_get_response(
+            BrowserPage(),
+            "GET",
+            "https://www.minebbs.com/login/",
+            (1, 1),
+            {},
+        )
+    )
+
+    assert response is None
+
+
+def test_browser_get_refetch_returns_the_chromium_response() -> None:
+    class BrowserPage:
+        url = "https://www.minebbs.com/login/"
+        frames: list[object] = []
+
+        async def goto(self, *_args: object, **_kwargs: object) -> object:
+            return object()
+
+        async def wait_for_timeout(self, _milliseconds: int) -> None:
+            return None
+
+        async def content(self) -> str:
+            return "<html><body>ready</body></html>"
+
+        async def evaluate(
+            self, script: str, payload: dict[str, object] | None = None
+        ) -> dict[str, object]:
+            if payload is not None:
+                assert payload["method"] == "GET"
+                return {
+                    "status": 200,
+                    "url": self.url,
+                    "headers": {"content-type": "text/html; charset=utf-8"},
+                    "text": '<form action="/login/login"><input name="password"></form>',
+                }
+            if "containerCount" in script:
+                return {
+                    "href": self.url,
+                    "readyState": "complete",
+                    "hasBody": True,
+                    "containerCount": 0,
+                    "descendantCount": 0,
+                    "markerNames": [],
+                }
+            return {
+                "slider": False,
+                "title": "登录 | MineBBS 我的世界中文论坛",
+                "href": self.url,
+                "readyState": "complete",
+                "hasBody": True,
+            }
+
+    response = asyncio.run(
+        EsaSliderChallengeResolver()._browser_get_response(
+            BrowserPage(),
+            "GET",
+            "https://www.minebbs.com/login/",
+            (1, 1),
+            {},
+        )
+    )
+
+    assert response is not None
+    assert response.status_code == 200
+    assert 'action="/login/login"' in response.text
+
+
 def test_bezier_path_has_a_smooth_bounded_vertical_curve() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(19))
 

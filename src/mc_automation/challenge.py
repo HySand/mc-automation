@@ -294,6 +294,15 @@ class EsaSliderChallengeResolver:
                     status_code=response.status_code,
                 )
                 return response
+            log_step(
+                "esa_browser_transport",
+                site="minebbs",
+                status="failed",
+                method=current_method,
+                url=url,
+                attempt=attempt,
+                max_attempts=attempt_limit,
+            )
         return None
 
     async def _browser_request_cloak_async(
@@ -373,12 +382,13 @@ class EsaSliderChallengeResolver:
             headers=request_kwargs.get("headers"),
         ).prepare()
         prepared_url = str(prepared.url or url)
-        navigation = await page.goto(
+        await page.goto(
             prepared_url,
             wait_until="domcontentloaded",
             timeout=round(max(timeout) * 1000),
         )
         await self._settle_playwright_page(page)
+        await self._log_playwright_page_state(page, expected_url=prepared_url)
         cleared = await self._page_is_clear(page, expected_url=prepared_url)
         if not cleared:
             cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
@@ -386,16 +396,7 @@ class EsaSliderChallengeResolver:
             )
         if not cleared:
             return None
-        headers = await navigation.all_headers() if navigation is not None else {}
-        status_code = int(navigation.status) if navigation is not None else 200
-        text = "" if method == "HEAD" else await page.content()
-        return self._build_browser_response(
-            method,
-            page.url,
-            status_code,
-            headers,
-            text,
-        )
+        return await self._browser_fetch_response(page, prepared, timeout)
 
     async def _browser_post_response(
         self,
@@ -429,6 +430,15 @@ class EsaSliderChallengeResolver:
             json=request_kwargs.get("json"),
             headers=request_kwargs.get("headers"),
         ).prepare()
+        return await self._browser_fetch_response(page, prepared, timeout)
+
+    async def _browser_fetch_response(
+        self,
+        page: Any,
+        prepared: requests.PreparedRequest,
+        timeout: tuple[float, float],
+    ) -> requests.Response | None:
+        method = str(prepared.method or "GET").upper()
         blocked_headers = {
             "accept-encoding",
             "connection",
@@ -445,8 +455,10 @@ class EsaSliderChallengeResolver:
         body = prepared.body
         if isinstance(body, bytes):
             body = body.decode("utf-8")
+        if body is not None and not isinstance(body, str):
+            return None
         payload = {
-            "url": str(prepared.url or url),
+            "url": str(prepared.url or ""),
             "method": method,
             "headers": headers,
             "body": body,
@@ -458,6 +470,7 @@ class EsaSliderChallengeResolver:
                     method: payload.method,
                     headers: payload.headers,
                     credentials: 'include',
+                    cache: 'no-store',
                     redirect: 'follow'
                   };
                   if (payload.body !== null) init.body = payload.body;
@@ -475,21 +488,31 @@ class EsaSliderChallengeResolver:
         )
         if not isinstance(result, dict):
             return None
-        final_url = str(result.get("url", ""))
-        text = str(result.get("text", ""))
-        status_code = int(result.get("status", 0))
-        if not self._is_same_origin(final_url, url) or not self._browser_text_is_clear(
+        final_url = result.get("url")
+        text = result.get("text")
+        if not isinstance(final_url, str) or not isinstance(text, str):
+            return None
+        try:
+            status_code = int(result.get("status", 0))
+        except (TypeError, ValueError):
+            return None
+        prepared_url = str(prepared.url or "")
+        if not 100 <= status_code <= 599:
+            return None
+        if not self._is_same_origin(final_url, prepared_url) or not self._browser_text_is_clear(
             status_code, text
         ):
             return None
         result_headers = result.get("headers", {})
-        return self._build_browser_response(
+        response = self._build_browser_response(
             method,
             final_url,
             status_code,
             result_headers if isinstance(result_headers, dict) else {},
             text,
         )
+        response.request = prepared
+        return response
 
     @classmethod
     def _browser_text_is_clear(cls, status_code: int, text: str) -> bool:

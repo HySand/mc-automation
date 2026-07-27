@@ -319,12 +319,15 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 - The bridge binds its first accepted MineBBS origin. Every later target and final redirect must have
   the same scheme, host, and effective port. Cross-origin requests or redirects return `None` and the
   transport raises `SecurityChallenge`.
-- Browser GET/HEAD prepares query parameters with `requests.Request`, navigates with Chromium, and
-  returns a synthetic `requests.Response`; HEAD exposes an empty body. Browser POST first opens the
-  bound origin, then performs one same-origin `fetch()` with `credentials='include'`, the prepared
-  form/JSON body, and only browser-safe request headers. Response status, final URL, exposed headers,
-  and text are copied into the synthetic response; browser cookies and User-Agent are synchronized
-  after successful cleanup.
+- Browser GET/HEAD prepares query parameters with `requests.Request` and navigates with Chromium to
+  clear or confirm the page. It must not return the original navigation response: a client-side
+  transition can leave that response at HTTP 403 even when the DOM changes. After structural
+  clearance, the bridge performs a same-origin `fetch()` of the original safe request with
+  `credentials='include'` and `cache='no-store'`; only the fetched status/body are returned in a
+  synthetic `requests.Response`, and HEAD exposes an empty body. Browser POST first opens the bound
+  origin, then uses the same fetch helper with the prepared form/JSON body and only browser-safe
+  request headers. Response status, final URL, exposed headers, and text are copied into the
+  synthetic response; browser cookies and User-Agent are synchronized after successful cleanup.
 - POST is never retried after entering browser mode. Any browser startup, navigation, fetch,
   classification, session-read, or cleanup failure is treated as an indeterminate single dispatch
   and stops the site. This prevents duplicate login, purchase, sign-in, and bump submissions.
@@ -340,6 +343,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 | Browser/profile cleanup fails | Return `False`; no cookie/User-Agent sync |
 | Initial challenged GET/HEAD clears through browser request | Enter sticky same-origin browser mode and return the Chromium response |
 | Browser bridge fails its initial GET/HEAD | Raise `SecurityChallenge`; do not call `resolve()` for another three attempts |
+| DOM looks clear but the same-context GET/HEAD refetch is HTTP 403 or challenge HTML | Reject the response and continue the bounded safe-request attempts |
 | Browser-mode GET/HEAD fails | Use at most three fresh profiles, then raise `SecurityChallenge` |
 | Browser-mode POST fails before or after dispatch | Raise `SecurityChallenge` after one attempt; never replay |
 | Browser target or final redirect changes origin | Reject the response and raise `SecurityChallenge` |
@@ -372,6 +376,9 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 - Assert a failed initial browser bridge does not invoke the legacy resolver, safe browser methods
   use at most three attempts, and browser POST invokes exactly one attempt even when cleanup or
   response classification fails.
+- Assert browser GET/HEAD refetches the prepared URL after DOM clearance, rejects a refetched HTTP
+  403 before the adapter parser runs, and returns the refetched HTTP 200 body rather than the stale
+  navigation response.
 - Assert the resolver-owned temporary profile is removed after both successful startup and failed
   browser launch; no `uc_*` or resolver-prefixed profile is retained by the normal path.
 - Assert configuration/workflow install browser support from `MINEBBS_ESA_SLIDER_ENABLED`, not from
