@@ -73,12 +73,32 @@ jobs:
           cache: pip
 
       - name: Restore operational state
+        id: state_cache
         uses: actions/cache/restore@v4
         with:
           path: .state/state.json
-          key: mc-automation-state-${{ github.run_id }}
+          key: mc-automation-state-v2-${{ github.run_id }}
           restore-keys: |
+            mc-automation-state-v2-
             mc-automation-state-
+
+      - name: Clear legacy MineBBS ESA suspension
+        if: startsWith(steps.state_cache.outputs.cache-matched-key, 'mc-automation-state-') && !startsWith(steps.state_cache.outputs.cache-matched-key, 'mc-automation-state-v2-')
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          path = Path(".state/state.json")
+          if path.is_file():
+              state = json.loads(path.read_text(encoding="utf-8"))
+              minebbs = state.setdefault("sites", {}).setdefault("minebbs", {})
+              minebbs["challenge_count"] = 0
+              minebbs["suspended_until"] = None
+              path.write_text(
+                  json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                  encoding="utf-8",
+              )
 
       - name: Install application
         shell: bash
@@ -118,7 +138,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .state/state.json
-          key: mc-automation-state-${{ github.run_id }}
+          key: mc-automation-state-v2-${{ github.run_id }}
 
       - name: Propagate automation result
         if: always() && steps.automation.outputs.exit_code != '0'

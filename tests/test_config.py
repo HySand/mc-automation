@@ -241,6 +241,10 @@ def test_browser_extra_and_workflow_use_nodriver() -> None:
     assert legacy_browser_command not in workflow.casefold()
     assert "MINEBBS_ESA_SLIDER_ENABLED" in workflow
     assert "MINEBBS_BROWSER_EXECUTABLE_PATH" in workflow
+    assert "mc-automation-state-v2-${{ github.run_id }}" in workflow
+    assert "Clear legacy MineBBS ESA suspension" in workflow
+    assert 'minebbs["challenge_count"] = 0' in workflow
+    assert 'minebbs["suspended_until"] = None' in workflow
 
 
 def test_workflow_enforces_warp_and_keeps_promotion_proxy_configuration_separate() -> None:
