@@ -613,6 +613,42 @@ def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
     ]
 
 
+def test_promotion_incomplete_doing_page_skips_without_visiting_proxies() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    apply_url = "https://example.test/home.php?mod=task&do=apply&id=1"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    incomplete = "<html>incomplete task shell</html>"
+    transport = FakeTransport(
+        {
+            task_url: incomplete,
+            apply_url: "task status unavailable",
+            doing_url: incomplete,
+        }
+    )
+    visitor = FakePromotionVisitor([True])
+    adapter = KLPBBSAdapter(
+        replace(promotion_config(), promotion_url="https://example.test/?fromuid=5"),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SKIPPED
+    assert result.message == "推广任务状态暂时无法确认，已跳过推广并继续主流程"
+    assert not visitor.urls
+    assert [call[1] for call in transport.calls] == [
+        task_url,
+        task_url,
+        task_url,
+        apply_url,
+        doing_url,
+        doing_url,
+        doing_url,
+    ]
+
+
 def test_promotion_ignores_management_link_and_uses_configured_fromuid_url() -> None:
     task_url = "https://example.test/home.php?mod=task"
     doing_url = "https://example.test/home.php?mod=task&item=doing"

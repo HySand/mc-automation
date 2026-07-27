@@ -391,9 +391,9 @@ class EsaSliderChallengeResolver:
         await self._log_playwright_page_state(page, expected_url=prepared_url)
         cleared = await self._page_is_clear(page, expected_url=prepared_url)
         if not cleared:
-            cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
+            cleared = await self._drag_slider_playwright(
                 page, expected_url=prepared_url
-            )
+            ) and await self._wait_until_clear(page, expected_url=prepared_url)
         if not cleared:
             return None
         return await self._browser_fetch_response(page, prepared, timeout)
@@ -416,9 +416,9 @@ class EsaSliderChallengeResolver:
         await self._settle_playwright_page(page)
         cleared = await self._page_is_clear(page, expected_url=origin)
         if not cleared:
-            cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
+            cleared = await self._drag_slider_playwright(
                 page, expected_url=origin
-            )
+            ) and await self._wait_until_clear(page, expected_url=origin)
         if not cleared:
             return None
 
@@ -804,9 +804,9 @@ class EsaSliderChallengeResolver:
                 resolved=cleared,
             )
             if not cleared:
-                cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
+                cleared = await self._drag_slider_playwright(
                     page, expected_url=url
-                )
+                ) and await self._wait_until_clear(page, expected_url=url)
             if cleared:
                 browser_session = await self._read_playwright_session(context, page)
         except Exception as exc:
@@ -848,12 +848,16 @@ class EsaSliderChallengeResolver:
         )
         return True
 
-    async def _drag_slider_playwright(self, page: Any) -> bool:
+    async def _drag_slider_playwright(self, page: Any, *, expected_url: str | None = None) -> bool:
         deadline = self._monotonic() + self.wait_seconds
         frame: Any = None
         handle_box: Any = None
         track_box: Any = None
         while self._monotonic() <= deadline:
+            if expected_url is not None and await self._page_is_clear(
+                page, expected_url=expected_url
+            ):
+                return True
             for candidate in [page, *getattr(page, "frames", [])]:
                 try:
                     handle_box = await candidate.locator(self.HANDLE_SELECTOR).first.bounding_box(

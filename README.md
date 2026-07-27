@@ -16,6 +16,7 @@
 - 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点在本轮立即停止并报告 `manual_intervention`；后续调度仍会重新尝试，不写入跨运行暂停标记。
 - KLPBBS 使用独立的 `cloudscraper` 会话；其他站点默认使用普通 `requests` 会话，所有响应仍经过统一挑战检测。MineBBS 首次通过 `CloakBrowser` 清除 ESA 后会锁定到同源浏览器传输，避免切回 Python HTTP/TLS 指纹后再次被拦截。
 - KLPBBS 推广任务参考 `klpAutomation`，并优先消费每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；每个来源内部随机打散，来源之间保持新鲜度优先级，全局去重后每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。
+- KLPBBS 推广任务参考 `klpAutomation`，并优先消费每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；每个来源内部随机打散，来源之间保持新鲜度优先级，全局去重后每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。任务中心返回不完整空壳且无法确认“进行中”时只安全跳过推广，不访问代理池，也不阻断 KLPBBS 的排名、所有权和官方顶帖流程。
 - MineBBS ESA 滑块可选使用免费版 `CloakBrowser` 读取滑块与轨道的 DOM 几何信息，并通过原始 Playwright 鼠标拖到末端；不截图、不调用 AI。验证通过后，同源 GET/HEAD/POST 均继续使用 Chromium 网络栈。WDSJFWQ 图片验证码仍可独立启用 OpenAI-compatible 视觉模型。
 
 ## 配置
@@ -82,7 +83,7 @@ AI_SOLVER_API_KEY=...
 AI_SOLVER_MODEL=gpt-4o-mini
 ```
 
-WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只返回 `{"code":"...","confidence":...}`，随后随机生成 `PlayerNNNNNN` 用户名提交点赞表单。MineBBS ESA 只在显式启用 `MINEBBS_ESA_SLIDER_ENABLED` 后对 GET/HEAD 挑战启动 Chromium，读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的边界。首次安全请求最多使用 3 个相互独立的浏览器/profile 尝试，任一次清除挑战就停止；三次全部失败才报告 `manual_intervention`。输入先用约 1.2 秒的三阶 Bezier 曲线接近滑块，再按下并执行从成功人工样本缩放出的 61 帧、约 465 ms 拖动轨迹；全程只发送 `mouseMoved` 和一次 `mousePressed`，不发送 `mouseReleased`。nodriver 路径通过低层 CDP `Input.dispatchMouseEvent` 发送事件；CloakBrowser 路径使用其原始 Playwright 鼠标，避免已 humanize 的 `page.mouse.move()` 把每个 Bezier 点再次展开为完整轨迹。所有点均按绝对单调时钟调度。挑战 DOM 清除后，程序不会直接信任最初的导航响应，而会在同一 Chromium 会话中以 `cache: 'no-store'` 重新请求原 GET/HEAD；只有真实状态码和正文均通过挑战检测才交给业务解析器。MineBBS 传输随后绑定首次请求的 origin，后续同源 GET/HEAD/POST 直接由 Chromium 执行，并在每次成功请求后同步 Cookie 和 User-Agent；跨域目标被拒绝。GET/HEAD 失败最多尝试 3 个独立 profile，POST 只发送一次，绝不因清理、解析或网络异常重放。初始受挑战 POST 仍直接失败，不会先提交再尝试浏览器。ESA 路径不会向模型发送截图或其他数据；轨迹单元测试只能验证输入契约，ESA 是否放行仍以实时挑战页面消失为准。
+WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只返回 `{"code":"...","confidence":...}`，随后随机生成 `PlayerNNNNNN` 用户名提交点赞表单。MineBBS ESA 只在显式启用 `MINEBBS_ESA_SLIDER_ENABLED` 后对 GET/HEAD 挑战启动 Chromium，读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的边界。首次安全请求最多使用 3 个相互独立的浏览器/profile 尝试，任一次清除挑战就停止；三次全部失败才报告 `manual_intervention`。等待期间会同时检查页面是否被 Cloudflare/ESA 自动放行以及滑块是否出现；没有滑块的 Cloudflare iframe/JS 跳转不会再被误判成 ESA 几何缺失。输入先用约 1.2 秒的三阶 Bezier 曲线接近滑块，再按下并执行从成功人工样本缩放出的 61 帧、约 465 ms 拖动轨迹；全程只发送 `mouseMoved` 和一次 `mousePressed`，不发送 `mouseReleased`。nodriver 路径通过低层 CDP `Input.dispatchMouseEvent` 发送事件；CloakBrowser 路径使用其原始 Playwright 鼠标，避免已 humanize 的 `page.mouse.move()` 把每个 Bezier 点再次展开为完整轨迹。所有点均按绝对单调时钟调度。挑战 DOM 清除后，程序不会直接信任最初的导航响应，而会在同一 Chromium 会话中以 `cache: 'no-store'` 重新请求原 GET/HEAD；只有真实状态码和正文均通过挑战检测才交给业务解析器。MineBBS 传输随后绑定首次请求的 origin，后续同源 GET/HEAD/POST 直接由 Chromium 执行，并在每次成功请求后同步 Cookie 和 User-Agent；跨域目标被拒绝。GET/HEAD 失败最多尝试 3 个独立 profile，POST 只发送一次，绝不因清理、解析或网络异常重放。初始受挑战 POST 仍直接失败，不会先提交再尝试浏览器。ESA 路径不会向模型发送截图或其他数据；轨迹单元测试只能验证输入契约，ESA 是否放行仍以实时挑战页面消失为准。
 
 ## 挑战处理边界
 

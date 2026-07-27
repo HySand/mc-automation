@@ -96,6 +96,12 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - A draw response may be opaque. It counts as successful only when it contains a known success
   marker or one fresh authenticated `item=doing` read proves task ID 1's `do=draw` link has
   disappeared. Other task ID 1 links, such as `do=apply`, do not mean the completed task remains.
+- If the task-center or doing-task page is an incomplete HTTP 200 shell and three bounded parses
+  cannot confirm task state, the promotion action returns `skipped` without proxy visits. This
+  uncertainty must not block KLPBBS rank, ownership, inventory, purchase, or apply checks; the next
+  independent run may retry task discovery. A confirmed apply followed by an explicit empty doing
+  list remains a technical failure, because visiting an unconfirmed task would violate the progress
+  contract.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
 - If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may activate visible Chromium,
@@ -293,6 +299,11 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   `mouseReleased` or any other mouse event. ESA evaluates the pre-press pointer history: replaying
   the successful held trace without its approach history is rejected, while the complete sequence
   clears the public MineBBS challenge in the same `CloakBrowser` browser.
+- The Playwright wait loop observes two valid transitions in parallel: the page can become clear
+  through Cloudflare/ESA JavaScript without ever exposing the Alibaba slider, or the fixed slider
+  geometry can appear and require the Bezier drag. Recheck structural clearance before every
+  geometry probe. Do not spend the full slider timeout and fail merely because an auto-clearing
+  challenge has no slider DOM.
 - ESA's current dynamic module rotates (`dynamicJS/3.28.0/sg.*.js`) and the browser reduces
   effective `clientX/clientY` values to integers. Dynamic filenames, hashes, internal variable
   names, and encrypted payload values are not implementation contracts. A successful HTTP verify
@@ -340,6 +351,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 | Handle or track missing/not visible | Return `False`; no mouse input or session sync |
 | Non-positive dimensions or track not wider than handle | Return `False`; no drag |
 | Drag completes but challenge remains | Return `False`; no cookie/User-Agent sync |
+| Cloudflare/ESA clears through iframe/JavaScript without slider DOM | Detect structural clearance during the geometry wait and continue without mouse input |
 | Browser/profile cleanup fails | Return `False`; no cookie/User-Agent sync |
 | Initial challenged GET/HEAD clears through browser request | Enter sticky same-origin browser mode and return the Chromium response |
 | Browser bridge fails its initial GET/HEAD | Raise `SecurityChallenge`; do not call `resolve()` for another three attempts |
@@ -369,6 +381,8 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   movement segment within the configured duration budget.
 - Assert movement events use native `button/buttons` semantics, deadlines are non-uniform, and no
   endpoint dwell occurs before release.
+- Assert a challenge that changes from Cloudflare HTML to a structurally clear same-origin page
+  during the slider wait succeeds without querying slider geometry or emitting mouse input.
 - Assert cookies/User-Agent copy only after clear, the browser profile closes on all paths, missing
   geometry is unresolved, and missing `CloakBrowser`/Chromium is unresolved.
 - Assert a challenged GET switches `HttpTransport` to the browser bridge, later GET/HEAD/POST bypass
@@ -379,6 +393,9 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 - Assert browser GET/HEAD refetches the prepared URL after DOM clearance, rejects a refetched HTTP
   403 before the adapter parser runs, and returns the refetched HTTP 200 body rather than the stale
   navigation response.
+- Assert an unparseable KLPBBS task-center/doing page returns `skipped` without proxy visits and
+  allows the orchestrator to continue rank, ownership, and bump checks; an explicit empty doing list
+  after a confirmed apply remains a failure.
 - Assert the resolver-owned temporary profile is removed after both successful startup and failed
   browser launch; no `uc_*` or resolver-prefixed profile is retained by the normal path.
 - Assert configuration/workflow install browser support from `MINEBBS_ESA_SLIDER_ENABLED`, not from
@@ -484,6 +501,7 @@ complete allowlisted JSONL diagnostic stream.
 | Transient timeout or selected GET 5xx | Bounded transport retry; POST is not automatically retried |
 | KLPBBS rank at or below threshold | `skipped`; do not query inventory or spend |
 | MineBBS interval has not elapsed | `skipped`; do not query rank, inventory, or balances |
+| KLPBBS promotion task page remains an unparseable shell after bounded retries | Return `skipped`, do not visit proxies, and continue the KLPBBS main flow |
 
 ## Required tests
 

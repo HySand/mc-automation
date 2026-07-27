@@ -250,7 +250,14 @@ class KLPBBSAdapter:
             apply_succeeded = any(
                 marker in response.text for marker in ("任务申请成功", "成功申请", "succeed")
             )
-            task = self._load_promotion_task("home.php?mod=task&item=doing")
+            try:
+                task = self._load_promotion_task("home.php?mod=task&item=doing")
+            except SiteParseError:
+                return self._result(
+                    "promotion_task",
+                    ActionStatus.SKIPPED,
+                    "推广任务状态暂时无法确认，已跳过推广并继续主流程",
+                )
             if task is None:
                 if apply_succeeded:
                     raise SiteParseError("KLPBBS 推广任务领取后未出现在进行中列表")

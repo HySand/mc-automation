@@ -18,7 +18,7 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | MineBBS focused native-input probe | Resolver-owned Edge was actively foregrounded. High-resolution `SendInput` replay reached `left=320px`, hid the slider, issued one verify request, and returned `Success=true`, `VerifyResult=false`. Repeating with `MOUSEEVENTF_MOVE_NOCOALESCE` delivered `1 down + 62 moves + 1 up` and received the same rejection | Pass as discriminating evidence; native injection is not integrated because it does not clear ESA |
 | MineBBS pre-press history A/B | Held-only replay through CDP, `SendInput`, and legacy `mouse_event` was rejected. Adding the 232-event, about 1.2 s approach segment from the accepted manual sample before the same held drag navigated to the normal MineBBS title and removed the slider DOM | Root cause confirmed: ESA evaluates pointer history before `mousedown` |
 | MineBBS production resolver live probe | Visible public GET used the DOM-scaled cubic Bezier approach, one `mousePressed`, and the 61-point held cubic Bezier path with no release. The complete resolver returned `resolve=True`, synchronized six non-secret browser cookies and User-Agent, and cleaned its temporary profile | Pass; live ESA acceptance positive |
-| MineBBS Chromium transport bridge | GitHub Actions proved that copying Cookie/User-Agent back to `requests` still triggered WAF because the Python HTTP/TLS fingerprint changed. Run 30276801323 then exposed a second boundary bug: the first Chromium navigation response remained HTTP 403 and was handed to the login parser. The bridge now structurally clears the page and performs a same-context `cache: no-store` GET/HEAD before returning. A local real bridge returned HTTP 200 with a password login form; same-origin binding, bounded safe retries, and one-shot POST remain enforced | Pass locally and in 43 focused transport/challenge tests; full Actions flow pending this push |
+| MineBBS Chromium transport bridge | GitHub Actions proved that copying Cookie/User-Agent back to `requests` still triggered WAF because the Python HTTP/TLS fingerprint changed. Run 30276801323 exposed a stale HTTP 403 navigation response; run 30278711461 then showed a Cloudflare iframe/JS challenge with no ESA slider. The bridge now refetches the safe request in the same context and rechecks structural clearance throughout the geometry wait, so auto-clear can succeed without mouse input. A local real bridge returned HTTP 200 with a password login form; same-origin binding, bounded safe retries, and one-shot POST remain enforced | Pass locally and in 44 focused transport/challenge tests; full Actions flow pending this push |
 | nodriver browser smoke | `nodriver==0.50.3` opened a normal HTTPS page with Chromium, read DOM content and `navigator.userAgent`, and cleaned its temporary profile | Pass |
 | WDSJFWQ model path | Captcha image downloaded in-session; configured model was rejected with HTTP 400; a provider-listed vision model returned a valid 5-character alphanumeric result | Pass after `.env` model correction |
 | WDSJFWQ form path | Real form requires a named submit button and returns an opaque HTTP 302 body; adapter now sends the button and confirms only an internally consistent public like-count increase in the response or one fresh GET | Pass in regression tests; prior live submission cannot be retrospectively distinguished from an unchanged opaque response |
@@ -30,6 +30,7 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | Marker removal and rank policy | Obsolete promotion target/marker fields are absent from runtime configuration and workflow; the former marker value is migrated to required same-origin `KLPBBS_PROMOTION_URL`; local/GitHub promotion switch is enabled and `RANK_THRESHOLD=8` | Pass |
 | KLPBBS forum-list regression | First WARP run returned two 116584-byte HTTP 200 pages but no recognized normal rows. Rank parsing now probes the rewritten and canonical forum paths, accepts only normal-row IDs or their `th.new a.xst` subject links, and logs a non-sensitive row count | Pass in regression tests; live Actions recheck pending |
 | KLPBBS opaque promotion draw | Live task reached draw but returned no known success text. Adapter now confirms success only if a fresh `item=doing` page no longer contains task ID 1 | Pass in regression tests; live Actions recheck pending |
+| KLPBBS promotion shell isolation | Runs 30276801323 and 30278711461 both returned an unparseable task-center/doing shell after login and sign-in. The adapter now skips only the uncertain promotion action, never visits proxies without confirmed task state, and continues the KLPBBS rank/ownership/bump path | Pass in regression tests; next Actions run will verify the continued main flow |
 
 Final gate:
 
@@ -37,7 +38,7 @@ Final gate:
 ruff format --check .: pass (34 files)
 ruff check .: pass
 mypy src: pass (18 source files)
-pytest: 169 passed; coverage 81%
+pytest: 171 passed; coverage 81%
 uv lock --check: pass
 Workflow YAML parse: pass
 secret scan: 0 matches

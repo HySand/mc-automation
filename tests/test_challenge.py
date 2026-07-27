@@ -549,6 +549,51 @@ def test_browser_get_refetch_returns_the_chromium_response() -> None:
     assert 'action="/login/login"' in response.text
 
 
+def test_playwright_wait_detects_cloudflare_auto_clear_without_esa_slider() -> None:
+    class AutoClearingPage:
+        frames: list[object] = []
+
+        def __init__(self) -> None:
+            self.content_reads = 0
+            self.locator_reads = 0
+
+        async def content(self) -> str:
+            self.content_reads += 1
+            if self.content_reads == 1:
+                return "<title>Attention Required! | Cloudflare</title>"
+            return "<html><body>ready</body></html>"
+
+        async def evaluate(self, _script: str) -> dict[str, object]:
+            return {
+                "slider": False,
+                "title": "登录 | MineBBS 我的世界中文论坛",
+                "href": "https://www.minebbs.com/login/",
+                "readyState": "complete",
+                "hasBody": True,
+            }
+
+        def locator(self, _selector: str) -> object:
+            self.locator_reads += 1
+            raise AssertionError("ESA geometry must not be queried after Cloudflare auto-clears")
+
+    page = AutoClearingPage()
+
+    async def invoke() -> bool:
+        resolver = EsaSliderChallengeResolver(wait_seconds=1)
+        assert not await resolver._page_is_clear(
+            page, expected_url="https://www.minebbs.com/login/"
+        )
+        return await resolver._drag_slider_playwright(
+            page, expected_url="https://www.minebbs.com/login/"
+        )
+
+    cleared = asyncio.run(invoke())
+
+    assert cleared
+    assert page.content_reads == 2
+    assert page.locator_reads == 0
+
+
 def test_bezier_path_has_a_smooth_bounded_vertical_curve() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(19))
 
