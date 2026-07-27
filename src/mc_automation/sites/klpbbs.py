@@ -166,8 +166,25 @@ class KLPBBSAdapter:
         return _PromotionTask(apply_url, draw_url, visit_url, complete, progress)
 
     def _load_promotion_task(self, path: str = "home.php?mod=task") -> _PromotionTask | None:
-        page = self.transport.get(self._url(path))
-        return self._promotion_task(page.text)
+        error: SiteParseError | None = None
+        for attempt in range(1, 4):
+            page = self.transport.get(self._url(path))
+            try:
+                return self._promotion_task(page.text)
+            except SiteParseError as exc:
+                error = exc
+                log_step(
+                    "promotion_task_progress",
+                    site=self.name,
+                    status="retrying" if attempt < 3 else "failed",
+                    attempt=attempt,
+                    max_attempts=3,
+                    exception_type=type(exc).__name__,
+                )
+                if attempt < 3:
+                    time.sleep(1)
+        assert error is not None
+        raise error
 
     def _draw_promotion_reward(
         self, draw_url: str, proxy_successes: int, *, attempts: int | None = None

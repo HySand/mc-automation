@@ -526,7 +526,13 @@ def test_promotion_task_uses_stable_task_one_when_the_list_is_incomplete() -> No
     result = adapter.run_promotion_task()
 
     assert result.status is ActionStatus.SKIPPED
-    assert [call[1] for call in transport.calls] == [task_url, apply_url, doing_url]
+    assert [call[1] for call in transport.calls] == [
+        task_url,
+        task_url,
+        task_url,
+        apply_url,
+        doing_url,
+    ]
 
 
 def test_promotion_task_requires_a_proxy_visitor() -> None:
@@ -597,7 +603,14 @@ def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
 
     assert result.status is ActionStatus.SUCCESS
     assert not visitor.urls
-    assert [call[1] for call in transport.calls] == [task_url, apply_url, doing_url, draw_url]
+    assert [call[1] for call in transport.calls] == [
+        task_url,
+        task_url,
+        task_url,
+        apply_url,
+        doing_url,
+        draw_url,
+    ]
 
 
 def test_promotion_ignores_management_link_and_uses_configured_fromuid_url() -> None:

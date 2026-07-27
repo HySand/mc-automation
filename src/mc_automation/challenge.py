@@ -452,6 +452,7 @@ class EsaSliderChallengeResolver:
             )
             log_step("esa_navigation", site="minebbs", status="completed", url=url)
             await self._settle_playwright_page(page)
+            await self._log_playwright_page_state(page, expected_url=url)
             cleared = await self._page_is_clear(page, expected_url=url)
             log_step(
                 "esa_challenge_check",
@@ -528,6 +529,7 @@ class EsaSliderChallengeResolver:
                 break
             await self._sleep_ms(250)
         if frame is None or handle_box is None or track_box is None:
+            await self._log_playwright_page_state(page)
             log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
             return False
         handle_width = float(handle_box["width"])
@@ -586,6 +588,56 @@ class EsaSliderChallengeResolver:
     @staticmethod
     async def _settle_playwright_page(page: Any) -> None:
         await page.wait_for_timeout(500)
+
+    @classmethod
+    async def _log_playwright_page_state(
+        cls, page: Any, *, expected_url: str | None = None
+    ) -> None:
+        try:
+            state = await page.evaluate(
+                """() => {
+                  const containers = [...document.querySelectorAll(
+                    '#captcha-element,#h5_captcha-element,#waf_nc_block,#waf_nc_h5_block'
+                  )];
+                  const names = [...document.querySelectorAll('[id],[class]')]
+                    .flatMap(e => [e.id, ...e.classList])
+                    .filter(v => v && /captcha|slider|slide|track|drag|aliyun|waf|nc-/i.test(v));
+                  return {
+                    href: location.href,
+                    readyState: document.readyState,
+                    hasBody: !!document.body,
+                    containerCount: containers.length,
+                    descendantCount: containers.reduce(
+                      (n, e) => n + e.querySelectorAll('*').length, 0
+                    ),
+                    markerNames: [...new Set(names)].slice(0, 20)
+                  };
+                }"""
+            )
+        except Exception as exc:
+            log_step(
+                "esa_page_state",
+                site="minebbs",
+                status="failed",
+                exception_type=type(exc).__name__,
+                frame_count=len(getattr(page, "frames", [])),
+            )
+            return
+        href = str(state.get("href", "")) if isinstance(state, dict) else ""
+        log_step(
+            "esa_page_state",
+            site="minebbs",
+            status="observed",
+            frame_count=len(getattr(page, "frames", [])),
+            container_count=int(state.get("containerCount", 0)),
+            descendant_count=int(state.get("descendantCount", 0)),
+            marker_names=state.get("markerNames", []),
+            ready_state=str(state.get("readyState", "")),
+            has_body=bool(state.get("hasBody")),
+            final_origin_matches=(
+                cls._is_same_origin(href, expected_url) if expected_url is not None else None
+            ),
+        )
 
     @staticmethod
     async def _read_playwright_session(context: Any, page: Any) -> tuple[list[Any], str]:
@@ -933,10 +985,13 @@ class EsaSliderChallengeResolver:
     @classmethod
     async def _page_is_clear(cls, tab: Any, *, expected_url: str) -> bool:
         content_method = getattr(tab, "content", None)
-        if callable(content_method):
-            content = await content_method()
-        else:
-            content = await tab.get_content()
+        try:
+            if callable(content_method):
+                content = await content_method()
+            else:
+                content = await tab.get_content()
+        except Exception:
+            return False
         challenge = detect_security_challenge(200, content)
         if challenge not in (None, "security challenge marker: aliyunCaptcha"):
             return False
@@ -961,7 +1016,7 @@ class EsaSliderChallengeResolver:
             else:
                 state = await tab.evaluate("JSON.stringify(" + script + ")", return_by_value=True)
                 parsed = json.loads(state) if isinstance(state, str) else None
-        except (TypeError, ValueError):
+        except Exception:
             return False
         if not isinstance(parsed, dict):
             return False
