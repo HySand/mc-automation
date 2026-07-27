@@ -301,8 +301,9 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   live service decision that removes the challenge page. Do not repeatedly tune path parameters
   after the service has rejected both CDP and native injected replays of the same accepted sample.
 - Browser cookies and `navigator.userAgent` are copied back only after the slider DOM is absent,
-  the title has left the verification page, and browser cleanup
-  succeeds.
+  the title has left the verification page, the document has a body and has finished loading on the
+  expected origin, and browser cleanup succeeds. `about:blank`, browser error pages, cross-origin
+  redirects, and uninitialized documents never count as clearance merely because no slider exists.
 
 ### 4. Validation & Error Matrix
 

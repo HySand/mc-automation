@@ -360,7 +360,7 @@ class EsaSliderChallengeResolver:
             tab = await asyncio.wait_for(browser.get(url), timeout=navigation_timeout)
             log_step("esa_navigation", site="minebbs", status="completed", url=url)
             await self._settle_tab(tab)
-            cleared = await self._page_is_clear(tab)
+            cleared = await self._page_is_clear(tab, expected_url=url)
             log_step(
                 "esa_challenge_check",
                 site="minebbs",
@@ -371,7 +371,7 @@ class EsaSliderChallengeResolver:
             if not cleared:
                 cleared = await self._drag_slider(
                     tab, nodriver.cdp
-                ) and await self._wait_until_clear(tab)
+                ) and await self._wait_until_clear(tab, expected_url=url)
             if cleared:
                 browser_session = await self._read_browser_session(browser, tab)
         finally:
@@ -711,10 +711,10 @@ class EsaSliderChallengeResolver:
             value * total_duration for value in self._interpolate_profile(normalized, point_count)
         ]
 
-    async def _wait_until_clear(self, tab: Any) -> bool:
+    async def _wait_until_clear(self, tab: Any, *, expected_url: str) -> bool:
         deadline = self._monotonic() + self.wait_seconds
         while True:
-            if await self._page_is_clear(tab):
+            if await self._page_is_clear(tab, expected_url=expected_url):
                 return True
             remaining = deadline - self._monotonic()
             if remaining <= 0:
@@ -722,15 +722,14 @@ class EsaSliderChallengeResolver:
             await self._sleep_ms(min(500, max(1, int(remaining * 1000))))
 
     @classmethod
-    async def _page_is_clear(cls, tab: Any) -> bool:
+    async def _page_is_clear(cls, tab: Any, *, expected_url: str) -> bool:
         challenge = detect_security_challenge(200, await tab.get_content())
-        if challenge is None:
-            return True
-        if challenge != "security challenge marker: aliyunCaptcha":
+        if challenge not in (None, "security challenge marker: aliyunCaptcha"):
             return False
         state = await tab.evaluate(
             f"JSON.stringify({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r}),"
-            "title:document.title}})",
+            "title:document.title,href:location.href,readyState:document.readyState,"
+            "hasBody:!!document.body}})",
             return_by_value=True,
         )
         if not isinstance(state, str):
@@ -740,7 +739,31 @@ class EsaSliderChallengeResolver:
         except (TypeError, ValueError):
             return False
         title = str(parsed.get("title", ""))
-        return not bool(parsed.get("slider")) and "滑动验证页面" not in title
+        href = str(parsed.get("href", ""))
+        ready_state = str(parsed.get("readyState", ""))
+        return (
+            not bool(parsed.get("slider"))
+            and "滑动验证页面" not in title
+            and ready_state != "loading"
+            and bool(parsed.get("hasBody"))
+            and cls._is_same_origin(href, expected_url)
+        )
+
+    @staticmethod
+    def _is_same_origin(current_url: str, expected_url: str) -> bool:
+        try:
+            current = urlsplit(current_url)
+            expected = urlsplit(expected_url)
+            current_port = current.port or (443 if current.scheme.lower() == "https" else 80)
+            expected_port = expected.port or (443 if expected.scheme.lower() == "https" else 80)
+        except ValueError:
+            return False
+        return (
+            current.scheme.lower() in {"http", "https"}
+            and current.scheme.lower() == expected.scheme.lower()
+            and (current.hostname or "").lower() == (expected.hostname or "").lower()
+            and current_port == expected_port
+        )
 
     @staticmethod
     def _request_cookies(session: requests.Session, url: str, cdp: Any) -> list[Any]:

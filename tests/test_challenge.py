@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 from pathlib import Path
 from types import SimpleNamespace
@@ -84,6 +85,7 @@ class FakeTab:
     ) -> None:
         self.fallback_content = "ready" if clears else "<title>滑动验证页面</title>"
         self.contents = ["<title>滑动验证页面</title>", self.fallback_content]
+        self.current_content = self.contents[0]
         self.handle = FakeElement(handle_position)
         self.track = FakeElement(track_position or FakePosition(x=10, y=20, width=200, height=40))
         self.clock = clock
@@ -97,8 +99,10 @@ class FakeTab:
 
     async def get_content(self) -> str:
         if self.contents:
-            return self.contents.pop(0)
-        return self.fallback_content
+            self.current_content = self.contents.pop(0)
+        else:
+            self.current_content = self.fallback_content
+        return self.current_content
 
     async def select(self, selector: str, timeout: float) -> FakeElement | None:
         self.selects.append((selector, timeout))
@@ -121,7 +125,19 @@ class FakeTab:
 
     async def evaluate(self, script: str, *, return_by_value: bool) -> str | None:
         self.evaluations.append((script, return_by_value))
-        return "esa-nodriver" if script == "navigator.userAgent" else None
+        if script == "navigator.userAgent":
+            return "esa-nodriver"
+        if script.startswith("JSON.stringify("):
+            return json.dumps(
+                {
+                    "slider": self.current_content != "ready",
+                    "title": "MineBBS",
+                    "href": "https://example.test/",
+                    "readyState": "complete",
+                    "hasBody": True,
+                }
+            )
+        return None
 
 
 class FakeCookieJar:
@@ -383,9 +399,45 @@ def test_page_is_clear_when_passive_marker_remains_after_slider_navigation() -> 
 
         async def evaluate(self, _script: str, *, return_by_value: bool) -> str:
             assert return_by_value
-            return '{"slider":false,"title":"MineBBS 我的世界中文论坛"}'
+            return json.dumps(
+                {
+                    "slider": False,
+                    "title": "MineBBS 我的世界中文论坛",
+                    "href": "https://example.test/threads/example.1/",
+                    "readyState": "complete",
+                    "hasBody": True,
+                }
+            )
 
-    assert asyncio.run(EsaSliderChallengeResolver._page_is_clear(NavigatedTab()))
+    assert asyncio.run(
+        EsaSliderChallengeResolver._page_is_clear(
+            NavigatedTab(), expected_url="https://example.test/login/login"
+        )
+    )
+
+
+def test_page_is_not_clear_when_browser_is_still_on_blank_page() -> None:
+    class BlankTab:
+        async def get_content(self) -> str:
+            return "<html></html>"
+
+        async def evaluate(self, _script: str, *, return_by_value: bool) -> str:
+            assert return_by_value
+            return json.dumps(
+                {
+                    "slider": False,
+                    "title": "",
+                    "href": "about:blank",
+                    "readyState": "complete",
+                    "hasBody": True,
+                }
+            )
+
+    assert not asyncio.run(
+        EsaSliderChallengeResolver._page_is_clear(
+            BlankTab(), expected_url="https://example.test/login/login"
+        )
+    )
 
 
 def test_page_is_not_clear_when_a_different_challenge_replaces_esa() -> None:
@@ -396,7 +448,11 @@ def test_page_is_not_clear_when_a_different_challenge_replaces_esa() -> None:
         async def evaluate(self, _script: str, *, return_by_value: bool) -> str:
             raise AssertionError("non-ESA challenges must fail before DOM fallback")
 
-    assert not asyncio.run(EsaSliderChallengeResolver._page_is_clear(DeniedTab()))
+    assert not asyncio.run(
+        EsaSliderChallengeResolver._page_is_clear(
+            DeniedTab(), expected_url="https://example.test/login/login"
+        )
+    )
 
 
 def test_manual_sample_profile_preserves_probe_frames_and_endpoint_jumps() -> None:
