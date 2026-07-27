@@ -7,7 +7,7 @@ import pytest
 
 from mc_automation.config import SiteConfig
 from mc_automation.models import ActionStatus
-from mc_automation.promotion_proxy import ProxyPoolExhausted
+from mc_automation.promotion_proxy import PromotionVisitBatch, ProxyPoolExhausted
 from mc_automation.sites.base import SiteParseError
 from mc_automation.sites.klpbbs import KLPBBSAdapter
 
@@ -42,11 +42,12 @@ class FakePromotionVisitor:
         self.outcomes = outcomes
         self.urls: list[str] = []
 
-    def visit(self, promotion_url: str) -> bool:
+    def visit_batch(self, promotion_url: str) -> PromotionVisitBatch:
         self.urls.append(promotion_url)
         if not self.outcomes:
             raise ProxyPoolExhausted("test pool exhausted")
-        return self.outcomes.pop(0)
+        outcome = self.outcomes.pop(0)
+        return PromotionVisitBatch(1, int(outcome), not self.outcomes)
 
 
 def config() -> SiteConfig:
@@ -373,7 +374,7 @@ def test_promotion_task_detects_completion_on_final_pool_check() -> None:
     transport = FakeTransport(
         {
             task_url: initial,
-            doing_url: [initial, complete],
+            doing_url: complete,
             draw_url: "领取奖励成功",
         }
     )
@@ -391,7 +392,6 @@ def test_promotion_task_detects_completion_on_final_pool_check() -> None:
     assert result.metadata == {"proxy_successes": 1, "attempts": 1}
     assert [call[1] for call in transport.calls] == [
         task_url,
-        doing_url,
         doing_url,
         draw_url,
     ]
@@ -426,7 +426,7 @@ def test_promotion_task_continues_failed_proxies_without_delay_until_pool_exhaus
 
     assert result.status is ActionStatus.SKIPPED
     assert result.metadata == {"attempts": 2, "proxy_successes": 0}
-    assert visitor.urls == [visit_url, visit_url, visit_url]
+    assert visitor.urls == [visit_url, visit_url]
     assert [call[1] for call in transport.calls] == [task_url, doing_url]
     assert sleeps == []
 

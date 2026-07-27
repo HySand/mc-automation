@@ -63,8 +63,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   a candidate visit and must not be counted as task progress. An incomplete task may still expose a
   `do=draw&id=1` link with a `rewardless.gif`; draw is allowed only when `#csc_1` is at least 100 or
   the task scope has an explicit completed marker. Failed proxy responses consume that proxy and
-  continue immediately without a delay or task-page read; successful responses trigger a fresh authenticated progress
-  read, and pool exhaustion triggers one final read before the run is skipped.
+  continue immediately without a delay or task-page read. Proxy clicks run in bounded batches of at
+  most 20 workers; authenticated task operations remain single-threaded. A batch with any successful
+  response triggers one fresh authenticated progress read, and pool exhaustion triggers a final read
+  before the run is skipped.
 - A draw response may be opaque. It counts as successful only when it contains a known success
   marker or one fresh authenticated `item=doing` read proves task ID 1's `do=draw` link has
   disappeared. Other task ID 1 links, such as `do=apply`, do not mean the completed task remains.

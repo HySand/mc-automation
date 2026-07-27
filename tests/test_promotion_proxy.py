@@ -7,6 +7,7 @@ import requests
 
 from mc_automation.promotion_proxy import (
     DynamicProxyPool,
+    PromotionVisitBatch,
     ProxyPromotionVisitor,
     ProxySource,
     normalize_http_proxy,
@@ -193,3 +194,29 @@ def test_proxy_visitor_rejects_redirects_without_following_them() -> None:
 
     assert not visitor.visit("https://klpbbs.com/promotion?fromuid=5")
     assert session.calls[0][1]["allow_redirects"] is False
+
+
+def test_proxy_visitor_processes_one_concurrent_batch_and_reports_exhaustion() -> None:
+    queued_sessions = [
+        VisitSession(StubResponse(b"")),
+        VisitSession(StubResponse(b"", status_code=503)),
+        VisitSession(StubResponse(b"")),
+    ]
+
+    def session_factory() -> VisitSession:
+        return queued_sessions.pop()
+
+    visitor = ProxyPromotionVisitor(
+        StaticPool(
+            (
+                "http://8.8.8.8:8080",
+                "http://1.1.1.1:80",
+                "http://9.9.9.9:80",
+            )
+        ),
+        session_factory=session_factory,
+        workers=2,
+    )
+
+    assert visitor.visit_batch("https://klpbbs.com/?fromuid=5") == PromotionVisitBatch(2, 1, False)
+    assert visitor.visit_batch("https://klpbbs.com/?fromuid=5") == PromotionVisitBatch(1, 1, True)

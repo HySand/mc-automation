@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal, Protocol
@@ -17,6 +18,7 @@ from .transport import TransportError
 
 DEFAULT_PROXY_LIMIT = 500
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
+DEFAULT_PROXY_WORKERS = 20
 
 
 class ProxyPoolExhausted(TransportError):
@@ -27,8 +29,15 @@ class ProxySourceError(TransportError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class PromotionVisitBatch:
+    attempts: int
+    proxy_successes: int
+    exhausted: bool
+
+
 class PromotionVisitor(Protocol):
-    def visit(self, promotion_url: str) -> bool: ...
+    def visit_batch(self, promotion_url: str) -> PromotionVisitBatch: ...
 
 
 class ProxyPool(Protocol):
@@ -257,10 +266,12 @@ class ProxyPromotionVisitor:
         *,
         session_factory: Callable[[], requests.Session] = requests.Session,
         timeout: tuple[float, float] = (2.0, 5.0),
+        workers: int = DEFAULT_PROXY_WORKERS,
     ) -> None:
         self.pool = pool
         self.session_factory = session_factory
         self.timeout = timeout
+        self.workers = workers
         self._proxies: tuple[str, ...] | None = None
         self._next_index = 0
 
@@ -273,8 +284,7 @@ class ProxyPromotionVisitor:
         self._next_index += 1
         return proxy
 
-    def visit(self, promotion_url: str) -> bool:
-        proxy = self._next_proxy()
+    def _visit_proxy(self, promotion_url: str, proxy: str, attempt: int) -> bool:
         session = self.session_factory()
         session.trust_env = False
         session.cookies.clear()
@@ -300,7 +310,7 @@ class ProxyPromotionVisitor:
                 "promotion_proxy_visit",
                 site="klpbbs",
                 status="completed" if success else "failed",
-                action=self._next_index,
+                action=attempt,
                 status_code=response.status_code,
             )
             return success
@@ -309,10 +319,37 @@ class ProxyPromotionVisitor:
                 "promotion_proxy_visit",
                 site="klpbbs",
                 status="failed",
-                action=self._next_index,
+                action=attempt,
             )
             return False
         finally:
             if response is not None:
                 response.close()
             session.close()
+
+    def visit(self, promotion_url: str) -> bool:
+        proxy = self._next_proxy()
+        return self._visit_proxy(promotion_url, proxy, self._next_index)
+
+    def visit_batch(self, promotion_url: str) -> PromotionVisitBatch:
+        if self._proxies is None:
+            self._proxies = self.pool.load()
+        if self._next_index >= len(self._proxies):
+            raise ProxyPoolExhausted("本轮动态代理池已耗尽")
+
+        start = self._next_index
+        end = min(start + self.workers, len(self._proxies))
+        batch = self._proxies[start:end]
+        self._next_index = end
+        with ThreadPoolExecutor(max_workers=self.workers) as executor:
+            outcomes = tuple(
+                executor.map(
+                    lambda item: self._visit_proxy(promotion_url, item[1], item[0]),
+                    enumerate(batch, start=start + 1),
+                )
+            )
+        return PromotionVisitBatch(
+            attempts=len(batch),
+            proxy_successes=sum(outcomes),
+            exhausted=end >= len(self._proxies),
+        )

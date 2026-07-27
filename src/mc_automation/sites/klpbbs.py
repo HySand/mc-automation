@@ -255,7 +255,7 @@ class KLPBBSAdapter:
         previous_progress = task.progress_percent
         while True:
             try:
-                proxy_succeeded = self.promotion_visitor.visit(task.visit_url)
+                batch = self.promotion_visitor.visit_batch(task.visit_url)
             except ProxyPoolExhausted as exc:
                 task = self._load_promotion_task("home.php?mod=task&item=doing")
                 if task is None:
@@ -293,9 +293,9 @@ class KLPBBSAdapter:
                     metadata=metadata,
                 )
 
-            attempts += 1
-            proxy_successes += int(proxy_succeeded)
-            if not proxy_succeeded:
+            attempts += batch.attempts
+            proxy_successes += batch.proxy_successes
+            if batch.proxy_successes == 0 and not batch.exhausted:
                 continue
             task = self._load_promotion_task("home.php?mod=task&item=doing")
             if task is None:
@@ -327,6 +327,20 @@ class KLPBBSAdapter:
                     ActionStatus.SUCCESS,
                     "推广任务已完成，页面未提供额外领奖动作",
                     metadata=completion_metadata,
+                )
+            if batch.exhausted:
+                metadata = {
+                    "attempts": attempts,
+                    "proxy_successes": proxy_successes,
+                }
+                if task.progress_percent is not None:
+                    metadata["progress_percent"] = round(task.progress_percent)
+                return ActionResult(
+                    self.name,
+                    "promotion_task",
+                    ActionStatus.SKIPPED,
+                    "动态代理池已耗尽，推广任务尚未完成",
+                    metadata=metadata,
                 )
             time.sleep(self.config.promotion_visit_delay_seconds)
 

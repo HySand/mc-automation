@@ -126,10 +126,11 @@ GitHub schedule/manual trigger
 - The GitHub Actions job establishes a system-level Cloudflare WARP full tunnel before dependency installation and verifies `warp=on`; failure aborts the job instead of using the runner's original egress.
 - Promotion visits use a separate session with no cookies, credentials, CSRF tokens, environment proxies, or authenticated Referer. The visitor fetches bounded candidate lists from the reference sources through WARP, isolates source failures, validates public IP-literal HTTP proxy endpoints, deduplicates them, and consumes each endpoint once.
 - After the KLPBBS adapter validates the discovered promotion URL against its configured origin, the visitor sends that exact URL through the selected HTTP proxy. The authenticated task transport never uses the dynamic proxy pool.
-- Proxy attempts are sequential, delayed between attempts, reject redirects, and retain normal TLS
-  certificate verification. Failed proxies are skipped until the pool is exhausted. A successful
-  2xx response is not progress; it only triggers a fresh authenticated read of Discuz `#csc_1`.
-  Completion is based on server progress, not request count.
+- Proxy attempts run in bounded batches of at most 20 workers, with a delay between effective
+  batches; redirects are rejected and normal TLS certificate verification remains enabled. Failed
+  proxies are skipped until the pool is exhausted. A successful 2xx response is not progress; a
+  completed batch only triggers one authenticated read of Discuz `#csc_1`. Completion is based on
+  server progress, not request count.
 
 ## Site-Specific Design
 
