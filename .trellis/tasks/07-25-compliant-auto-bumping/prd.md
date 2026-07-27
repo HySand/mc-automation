@@ -82,7 +82,8 @@
 
 - `MINEBBS_ESA_SLIDER_ENABLED` 默认关闭；开启时仅允许对 GET/HEAD 的 Alibaba ESA 滑块挑战启动可见 Chromium，挑战未清除时必须失败关闭。
 - ESA resolver 只读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的 DOM 边界，计算滑到末端的距离并生成平滑鼠标轨迹；不得截图交给 AI、调用模型估算坐标或伪造验证 token。
-- 滑块或轨道缺失、尺寸异常、`nodriver` 或 Chromium 不可用或拖动后挑战仍存在时，使用新浏览器/profile 继续下一次尝试；每次 Action 最多 3 次，全部失败后转 `manual_intervention`，POST 不重放。
+- 滑块或轨道缺失、尺寸异常、`CloakBrowser` 或 Chromium 不可用或拖动后挑战仍存在时，使用新浏览器/profile 继续下一次尝试；每次 Action 最多 3 次，全部失败后转 `manual_intervention`，POST 不重放。
+- 若 MineBBS 403 呈现 Cloudflare managed-challenge Turnstile 而非 ESA，仅允许在已分类为活动挑战的 Frame 内，对唯一可见的标准 checkbox/label 执行一次 DOM 几何点击；缺失、隐藏或歧义控件继续失败关闭，不调用 AI、不猜坐标、不伪造 token。
 - KLPBBS 可自动发现并领取官方推广任务，从参考项目使用的公开来源动态获取 HTTP 代理，通过不同代理直接访问经 KLPBBS 适配器同源校验的推广链接、轮询任务状态并在明确完成后领奖。
 - 普通请求（包括代理源下载、推广任务申请、状态检查和领奖）走 WARP；只有最终推广链接点击使用显式动态 HTTP 代理，不继承 WARP 的应用层代理环境。
 - 代理点击会话不携带登录 Cookie、账号凭据、CSRF token 或原站 Referer。
@@ -118,6 +119,7 @@
 - [ ] AC17（R9）：KLPBBS 推广任务可以处理可领取、进行中、已完成领奖和未知页面；动态代理源逐个失败隔离，代理经过校验去重且每轮只用一次，点击采用最多 20 个 worker 的有界批次，并且代理请求不携带认证状态；只手动跟随 Discuz 计数所需的有界同源跳转，完成只以任务页实际进度为准。
 - [ ] AC18（R9）：ESA resolver 只依据固定 DOM 几何拖动并在挑战清除后同步会话；默认模式、元素缺失或验证失败时保持 `manual_intervention`。
 - [ ] AC19（R10）：两个喜欢适配器可独立启停，只在授权私网靶场解析后运行；已喜欢时跳过，唯一链接/表单成功时报告成功，任何模糊页面均不提交。
+- [ ] AC20（R9）：Cloudflare Turnstile Frame 不会被误判为正常页面；仅唯一可见控件获得一次带平滑接近轨迹的点击，控件缺失或歧义时无点击且保持 `manual_intervention`。
 
 ## Out of Scope
 

@@ -102,7 +102,7 @@ GitHub schedule/manual trigger
 ### Non-AI Alibaba ESA slider handling
 
 - `MINEBBS_ESA_SLIDER_ENABLED` is an explicit opt-in and is valid only when MineBBS is enabled.
-- The resolver launches visible Chromium through `nodriver`, reuses request-session cookies, and locates
+- The resolver launches visible Chromium through free `CloakBrowser`, reuses request-session cookies, and locates
   `#aliyunCaptcha-sliding-slider` plus `#aliyunCaptcha-sliding-wrapper` after the page renders.
 - Drag coordinates come only from the handle and track bounding boxes. A 232-point cubic Bezier
   approach first supplies the pointer history ESA evaluates before `mousedown`; the held path is a
@@ -122,9 +122,13 @@ GitHub schedule/manual trigger
   `SendInput` replay can produce trusted DOM events, hide the control, and still receive
   `VerifyResult=false`; only disappearance of the challenge page establishes clearance. A live
   public probe proved that preserving the pre-press approach history clears the same challenge.
-- Cookies and browser User-Agent are synchronized only after challenge markers disappear, then the
-  transport retries the original GET/HEAD once. Missing geometry, invalid dimensions, unavailable
-  `nodriver`/Chromium, failed verification, and all challenged POST requests remain `manual_intervention`.
+- A Runner may receive a Cloudflare managed-challenge Turnstile frame instead of ESA. The browser
+  treats that Frame as unresolved until one unique visible standard checkbox/label can be approached
+  with a bounded Bezier pointer path and clicked once; missing or ambiguous controls are never guessed.
+- Cookies and browser User-Agent are synchronized only after challenge markers disappear, and later
+  same-origin MineBBS requests remain on the Chromium transport. Missing geometry, invalid dimensions,
+  unavailable `CloakBrowser`/Chromium, failed verification, and all challenged POST requests remain
+  `manual_intervention`.
 - Promotion authentication, task apply/status, and reward draw continue through the guarded authenticated transport.
 - The GitHub Actions job establishes a system-level Cloudflare WARP full tunnel before dependency installation and verifies `warp=on`; failure aborts the job instead of using the runner's original egress.
 - Promotion visits use a separate session with no cookies, credentials, CSRF tokens, environment proxies, or authenticated Referer. The visitor fetches bounded candidate lists from the reference sources through WARP, isolates source failures, validates public IP-literal HTTP proxy endpoints, deduplicates them, and consumes each endpoint once.

@@ -44,6 +44,16 @@ class EsaSliderChallengeResolver:
         "/cdn-cgi/challenge-platform/",
         "/turnstile/",
     )
+    TURNSTILE_CONTROL_SELECTORS = (
+        ("ctp_label", "label.ctp-checkbox-label"),
+        ("cb_label", "label.cb-lb"),
+        ("role_checkbox", '[role="checkbox"]'),
+        ("checkbox", 'input[type="checkbox"]'),
+        ("ctp_container", ".ctp-checkbox-container"),
+        ("single_label", "label"),
+    )
+    TURNSTILE_APPROACH_STEPS = 72
+    TURNSTILE_APPROACH_DURATION_MS = 720
     HORIZONTAL_GRAB_RANGE = (0.22, 0.78)
     VERTICAL_GRAB_RANGE = (0.28, 0.72)
     END_OVERSHOOT_RANGE = (0.36, 0.40)
@@ -958,16 +968,133 @@ class EsaSliderChallengeResolver:
         )
         return True
 
+    async def _click_turnstile_playwright(self, page: Any) -> bool | None:
+        """Click one visible Cloudflare checkbox in its challenge frame, if present."""
+
+        match = await self._find_turnstile_control(page)
+        if match is None:
+            return None
+
+        control_kind, control_count, box = match
+        x = float(box["x"])
+        y = float(box["y"])
+        width = float(box["width"])
+        height = float(box["height"])
+        log_step(
+            "turnstile_interaction",
+            site="minebbs",
+            status="detected",
+            control_count=control_count,
+            control_kind=control_kind,
+        )
+        target_x = x + (
+            width / 2
+            if control_kind in {"role_checkbox", "checkbox"}
+            else min(width * 0.22, max(18.0, height * 0.65))
+        )
+        target_y = y + height / 2
+        viewport = getattr(page, "viewport_size", None)
+        viewport_width = (
+            float(viewport.get("width", 1280)) if isinstance(viewport, dict) else 1280.0
+        )
+        viewport_height = (
+            float(viewport.get("height", 720)) if isinstance(viewport, dict) else 720.0
+        )
+        start_x = min(
+            viewport_width - 8.0,
+            max(8.0, target_x + self._random.uniform(180.0, 320.0)),
+        )
+        start_y = min(
+            viewport_height - 8.0,
+            max(8.0, target_y + self._random.uniform(-140.0, 140.0)),
+        )
+        approach = self._bezier_drag_path(
+            start_x,
+            start_y,
+            target_x,
+            end_y=target_y,
+            point_count=self.TURNSTILE_APPROACH_STEPS,
+            vertical_radius=min(36.0, max(8.0, height)),
+        )
+        mouse = self._raw_playwright_mouse(page)
+        try:
+            approach_started = self._monotonic()
+            for step, (move_x, move_y) in enumerate(approach, 1):
+                await self._wait_for_drag_deadline(
+                    approach_started,
+                    self.TURNSTILE_APPROACH_DURATION_MS * step / len(approach),
+                )
+                await mouse.move(move_x, move_y)
+            await mouse.down()
+            await self._sleep_ms(round(self._random.uniform(70.0, 140.0)))
+            await mouse.up()
+        except Exception as exc:
+            log_step(
+                "turnstile_interaction",
+                site="minebbs",
+                status="failed",
+                control_count=control_count,
+                control_kind=control_kind,
+                exception_type=type(exc).__name__,
+            )
+            return False
+        log_step(
+            "turnstile_interaction",
+            site="minebbs",
+            status="completed",
+            control_count=control_count,
+            control_kind=control_kind,
+            path_points=len(approach),
+            duration_ms=self.TURNSTILE_APPROACH_DURATION_MS,
+        )
+        return True
+
+    async def _find_turnstile_control(self, page: Any) -> tuple[str, int, dict[str, Any]] | None:
+        for frame in list(getattr(page, "frames", [])):
+            frame_url, frame_title = await self._read_playwright_frame_identity(frame)
+            if self._classify_page(title=frame_title, url=frame_url) != "cloudflare_waiting":
+                continue
+            for control_kind, selector in self.TURNSTILE_CONTROL_SELECTORS:
+                try:
+                    locator = frame.locator(selector)
+                    control_count = int(await locator.count())
+                    if control_count != 1:
+                        continue
+                    box = await locator.first.bounding_box(timeout=500)
+                except Exception:
+                    continue
+                if not isinstance(box, dict):
+                    continue
+                try:
+                    float(box["x"])
+                    float(box["y"])
+                    width = float(box["width"])
+                    height = float(box["height"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if width <= 0 or height <= 0:
+                    continue
+                return control_kind, control_count, box
+        return None
+
     async def _drag_slider_playwright(self, page: Any, *, expected_url: str | None = None) -> bool:
         deadline = self._monotonic() + self.wait_seconds
         frame: Any = None
         handle_box: Any = None
         track_box: Any = None
+        turnstile_attempted = False
         while self._monotonic() <= deadline:
             if expected_url is not None and await self._page_is_clear(
                 page, expected_url=expected_url
             ):
                 return True
+            if not turnstile_attempted:
+                turnstile_result = await self._click_turnstile_playwright(page)
+                if turnstile_result is not None:
+                    turnstile_attempted = True
+                    if turnstile_result:
+                        await self._sleep_ms(250)
+                        continue
             for candidate in [page, *getattr(page, "frames", [])]:
                 try:
                     handle_box = await candidate.locator(self.HANDLE_SELECTOR).first.bounding_box(
@@ -985,6 +1112,13 @@ class EsaSliderChallengeResolver:
                 break
             await self._sleep_ms(250)
         if frame is None or handle_box is None or track_box is None:
+            if not turnstile_attempted:
+                log_step(
+                    "turnstile_interaction",
+                    site="minebbs",
+                    status="skipped",
+                    control_count=0,
+                )
             await self._log_playwright_page_state(page)
             log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
             return False
@@ -1052,6 +1186,24 @@ class EsaSliderChallengeResolver:
     async def _settle_playwright_page(page: Any) -> None:
         await page.wait_for_timeout(500)
 
+    @staticmethod
+    async def _read_playwright_frame_identity(frame: Any) -> tuple[str, str]:
+        frame_url = getattr(frame, "url", "")
+        if callable(frame_url):
+            frame_url = frame_url()
+        if inspect.isawaitable(frame_url):
+            frame_url = await frame_url
+        frame_title = ""
+        title_method = getattr(frame, "title", None)
+        if callable(title_method):
+            try:
+                frame_title = title_method()
+                if inspect.isawaitable(frame_title):
+                    frame_title = await frame_title
+            except Exception:
+                frame_title = ""
+        return str(frame_url or ""), str(frame_title or "")
+
     @classmethod
     async def _log_playwright_page_state(
         cls, page: Any, *, expected_url: str | None = None
@@ -1106,24 +1258,9 @@ class EsaSliderChallengeResolver:
         frame_classes: list[str] = []
         frames = list(getattr(page, "frames", []))
         for frame in frames:
-            frame_url = getattr(frame, "url", "")
-            if callable(frame_url):
-                frame_url = frame_url()
-            if inspect.isawaitable(frame_url):
-                frame_url = await frame_url
-            frame_title = ""
-            title_method = getattr(frame, "title", None)
-            if callable(title_method):
-                try:
-                    frame_title = title_method()
-                    if inspect.isawaitable(frame_title):
-                        frame_title = await frame_title
-                except Exception:
-                    frame_title = ""
-            frame_urls.append(str(frame_url or ""))
-            frame_classes.append(
-                cls._classify_page(title=str(frame_title or ""), url=str(frame_url or ""))
-            )
+            frame_url, frame_title = await cls._read_playwright_frame_identity(frame)
+            frame_urls.append(frame_url)
+            frame_classes.append(cls._classify_page(title=frame_title, url=frame_url))
         log_step(
             "esa_page_state",
             site="minebbs",
@@ -1512,7 +1649,17 @@ class EsaSliderChallengeResolver:
         try:
             if callable(content_method):
                 parsed = await tab.evaluate(script)
+                if not isinstance(parsed, dict):
+                    return False
                 for frame in getattr(tab, "frames", []):
+                    frame_url, frame_title = await cls._read_playwright_frame_identity(frame)
+                    if cls._classify_page(title=frame_title, url=frame_url) in {
+                        "cloudflare_waiting",
+                        "cloudflare_block",
+                        "http_block",
+                        "http_error",
+                    }:
+                        return False
                     try:
                         frame_state = await frame.evaluate(
                             f"({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r})}})"
@@ -1532,6 +1679,13 @@ class EsaSliderChallengeResolver:
         title = str(parsed.get("title", ""))
         href = str(parsed.get("href", ""))
         ready_state = str(parsed.get("readyState", ""))
+        if cls._classify_page(title=title, url=href) in {
+            "cloudflare_waiting",
+            "cloudflare_block",
+            "http_block",
+            "http_error",
+        }:
+            return False
         return (
             not bool(parsed.get("slider"))
             and not any(marker in title for marker in cls.CHALLENGE_TITLES)

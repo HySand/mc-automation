@@ -14,6 +14,9 @@ CHALLENGE_MARKERS = (
     "验证您是真人",
     "cf-chl-",
     "Attention Required! | Cloudflare",
+    "Just a moment...",
+    "Checking your browser",
+    "Verify you are human",
     "captcha-element",
     "安全验证",
 )

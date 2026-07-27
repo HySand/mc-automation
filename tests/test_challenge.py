@@ -443,6 +443,128 @@ def test_playwright_page_state_logs_sanitized_frame_paths(
     assert "private title" not in output
 
 
+def test_page_is_not_clear_while_cloudflare_turnstile_frame_is_active() -> None:
+    class ChallengeFrame:
+        url = "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/f"
+
+        async def title(self) -> str:
+            return "Just a moment..."
+
+        async def evaluate(self, _script: str) -> dict[str, object]:
+            return {"slider": False}
+
+    class BrowserPage:
+        frames = [ChallengeFrame()]
+
+        async def content(self) -> str:
+            return "<html><body>normal outer shell</body></html>"
+
+        async def evaluate(self, _script: str) -> dict[str, object]:
+            return {
+                "slider": False,
+                "title": "登录 | MineBBS 我的世界中文论坛",
+                "href": "https://www.minebbs.com/login/",
+                "readyState": "complete",
+                "hasBody": True,
+            }
+
+    assert not asyncio.run(
+        EsaSliderChallengeResolver._page_is_clear(
+            BrowserPage(), expected_url="https://www.minebbs.com/login/"
+        )
+    )
+
+
+def test_turnstile_click_uses_one_visible_control_and_a_humanized_approach(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Mouse:
+        def __init__(self) -> None:
+            self.events: list[tuple[str, float | None, float | None]] = []
+
+        async def move(self, x: float, y: float) -> None:
+            self.events.append(("move", x, y))
+
+        async def down(self) -> None:
+            self.events.append(("down", None, None))
+
+        async def up(self) -> None:
+            self.events.append(("up", None, None))
+
+    class Locator:
+        first: Locator
+
+        def __init__(self) -> None:
+            self.first = self
+
+        async def count(self) -> int:
+            return 1
+
+        async def bounding_box(self, *, timeout: int) -> dict[str, float]:
+            assert timeout == 500
+            return {"x": 120.0, "y": 240.0, "width": 280.0, "height": 65.0}
+
+    class ChallengeFrame:
+        url = "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/f"
+
+        async def title(self) -> str:
+            return "Just a moment..."
+
+        def locator(self, selector: str) -> Locator:
+            assert selector == "label.ctp-checkbox-label"
+            return Locator()
+
+    mouse = Mouse()
+    page = SimpleNamespace(
+        frames=[ChallengeFrame()],
+        mouse=mouse,
+        _human_raw_mouse=mouse,
+        viewport_size={"width": 1280, "height": 720},
+    )
+    clock = FakeClock()
+    resolver = EsaSliderChallengeResolver(
+        wait_seconds=1,
+        random_source=random.Random(37),
+    )
+    monkeypatch.setattr(resolver, "_monotonic", clock.now)
+    monkeypatch.setattr(resolver, "_sleep_ms", clock.sleep_ms)
+
+    async def wait_for_deadline(_started: float, target_elapsed_ms: float) -> None:
+        clock.elapsed_ms = max(clock.elapsed_ms, round(target_elapsed_ms))
+
+    monkeypatch.setattr(resolver, "_wait_for_drag_deadline", wait_for_deadline)
+
+    assert asyncio.run(resolver._click_turnstile_playwright(page))
+
+    assert [event[0] for event in mouse.events].count("move") == resolver.TURNSTILE_APPROACH_STEPS
+    assert [event[0] for event in mouse.events][-2:] == ["down", "up"]
+    assert clock.elapsed_ms >= resolver.TURNSTILE_APPROACH_DURATION_MS
+
+
+def test_turnstile_control_discovery_rejects_ambiguous_matches() -> None:
+    class Locator:
+        first: Locator
+
+        async def count(self) -> int:
+            return 2
+
+        async def bounding_box(self, *, timeout: int) -> dict[str, float]:
+            raise AssertionError(f"ambiguous control must not be measured: {timeout}")
+
+    class ChallengeFrame:
+        url = "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/f"
+
+        async def title(self) -> str:
+            return "Just a moment..."
+
+        def locator(self, _selector: str) -> Locator:
+            return Locator()
+
+    page = SimpleNamespace(frames=[ChallengeFrame()])
+
+    assert asyncio.run(EsaSliderChallengeResolver()._find_turnstile_control(page)) is None
+
+
 def test_browser_transport_refuses_cross_origin_after_origin_is_bound() -> None:
     resolver = EsaSliderChallengeResolver()
     resolver._browser_origin = "https://www.minebbs.com/login/"

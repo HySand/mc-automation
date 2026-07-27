@@ -254,7 +254,6 @@ def test_workflow_enforces_warp_and_keeps_promotion_proxy_configuration_separate
     workflow = (root / ".github" / "workflows" / "automation.yml").read_text(encoding="utf-8")
 
     assert "viperadnan-git/setup-warp@691f6aa5a251ed89ea27a85e890f6f5313c1a3b5" in workflow
-    assert "stack: ipv4" in workflow
     assert "^warp=(on|plus)$" in workflow
     assert "KLPBBS_PROMOTION_PROXY_TARGET_URL" not in workflow
     assert "KLPBBS_PROMOTION_TARGET_MARKER" not in workflow

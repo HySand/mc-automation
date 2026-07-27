@@ -54,9 +54,7 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   Both run through `HttpTransport` with explicit timeouts and the same fail-closed challenge checks.
 - GitHub Actions establishes a system-level Cloudflare WARP full tunnel before dependency setup and
   requires Cloudflare trace to report `warp=on` or `warp=plus`. Setup or verification failure aborts
-  the job; ordinary application traffic never falls back to the runner's original egress. The
-  hosted-runner tunnel uses the IPv4 stack because dual-stack WARP produced MineBBS Turnstile 403s
-  and intermittent KLPBBS HTTP 200 shells on the same run.
+  the job; ordinary application traffic never falls back to the runner's original egress.
 - Only KLPBBS promotion-link clicks use the dynamic HTTP proxy pool. Proxy-source downloads,
   authenticated promotion task operations, and every other site request continue through WARP.
 - A promotion click uses a fresh session with `trust_env=False`, cleared cookies, explicit
@@ -116,6 +114,12 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   GET/HEAD/POST requests use Chromium rather than Python HTTP/TLS. GET/HEAD may use up to three fresh
   browser/profile attempts; POST has exactly one dispatch attempt. Browser failure never falls back
   to a second resolver cycle, and challenged POST requests are never replayed.
+- A MineBBS HTTP 403 may render a Cloudflare managed-challenge Turnstile frame instead of the ESA
+  slider. The same visible browser may wait for one unique visible standard checkbox/label inside a
+  frame already classified as an active Cloudflare challenge, approach it with a bounded Bezier
+  pointer path, and perform one normal press/release click per browser attempt. Missing, hidden, or
+  ambiguous controls remain unresolved; no AI, token fabrication, arbitrary coordinate guessing, or
+  challenged POST replay is allowed.
 - WDSJFWQ image CAPTCHAs are handled only inside the WDSJFWQ like form path when
   `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED=true`; the adapter downloads the captcha image with the same
   session, asks the model for strict JSON, validates the code shape, fills a random username, and
@@ -356,6 +360,8 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 | Non-positive dimensions or track not wider than handle | Return `False`; no drag |
 | Drag completes but challenge remains | Return `False`; no cookie/User-Agent sync |
 | Cloudflare/ESA clears through iframe/JavaScript without slider DOM | Detect structural clearance during the geometry wait and continue without mouse input |
+| Active Cloudflare Turnstile frame exposes one visible checkbox/label | Click it once with a bounded humanized approach and wait for structural clearance |
+| Turnstile control is missing, hidden, or ambiguous | Leave the challenge unresolved; do not guess a click point |
 | Browser/profile cleanup fails | Return `False`; no cookie/User-Agent sync |
 | Initial challenged GET/HEAD clears through browser request | Enter sticky same-origin browser mode and return the Chromium response |
 | Browser bridge fails its initial GET/HEAD | Raise `SecurityChallenge`; do not call `resolve()` for another three attempts |
@@ -387,6 +393,8 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   endpoint dwell occurs before release.
 - Assert a challenge that changes from Cloudflare HTML to a structurally clear same-origin page
   during the slider wait succeeds without querying slider geometry or emitting mouse input.
+- Assert an active Cloudflare challenge frame prevents false clearance, a unique visible Turnstile
+  control receives one Bezier-approach click, and missing/ambiguous controls receive no click.
 - Assert cookies/User-Agent copy only after clear, the browser profile closes on all paths, missing
   geometry is unresolved, and missing `CloakBrowser`/Chromium is unresolved.
 - Assert a challenged GET switches `HttpTransport` to the browser bridge, later GET/HEAD/POST bypass

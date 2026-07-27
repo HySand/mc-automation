@@ -45,6 +45,7 @@ PHASE_LABELS = {
     "esa_browser_transport": "ESA 浏览器传输",
     "esa_navigation_response": "Chromium 导航响应",
     "esa_fetch_response": "Chromium 同源请求",
+    "turnstile_interaction": "Cloudflare 人机验证",
     "site_action": "站点操作",
     "page_fetch": "读取页面",
     "like_count": "点赞数",
