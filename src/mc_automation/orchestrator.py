@@ -206,6 +206,14 @@ class Orchestrator:
             log_step("promotion", site=adapter.name, status="started")
             promotion = adapter.run_promotion_task()
             results.append(promotion)
+            log_step(
+                "promotion",
+                site=adapter.name,
+                status="completed",
+                result_status=promotion.status,
+                attempts=promotion.metadata.get("attempts"),
+                visits=promotion.metadata.get("visits"),
+            )
             if promotion.status in {
                 ActionStatus.MANUAL_INTERVENTION,
                 ActionStatus.TECHNICAL_FAILURE,

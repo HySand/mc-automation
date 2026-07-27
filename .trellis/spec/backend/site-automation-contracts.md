@@ -109,8 +109,11 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Assert the preserved adapter receives `Retry(total=2)`.
 - Probe KLPBBS homepage, login page, and forum list with read-only GET requests before release.
 - KLPBBS may alternate between a complete forum list and an incomplete HTTP 200 shell. Rank parsing
-  may repeat this read-only GET once, but accepts only explicit `normalthread_<ID>` DOM nodes; two
-  incomplete responses remain a parse failure and never lead to inventory or spending actions.
+  tries both the rewritten `forum-56-1.html` path and canonical
+  `forum.php?mod=forumdisplay&fid=56&page=1` path. It accepts explicit `normalthread_<ID>` DOM rows,
+  with a fallback to the same table's `th.new a.xst` subject links. Both incomplete responses remain
+  a parse failure and never lead to inventory or spending actions. Logs record only the parsed normal
+  thread count, not titles, authors, or HTML.
 
 ### 7. Wrong vs Correct
 

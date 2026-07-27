@@ -101,7 +101,14 @@ def test_rank_uses_normal_thread_order_and_rejects_unknown_markup() -> None:
 
     broken = KLPBBSAdapter(
         config(),
-        FakeTransport({forum_url: "<html>changed</html>"}),
+        FakeTransport(
+            {
+                forum_url: "<html>changed</html>",
+                "https://example.test/forum.php?mod=forumdisplay&fid=56&page=1": (
+                    "<html>still changed</html>"
+                ),
+            }
+        ),
         base_url="https://example.test",
     )
     with pytest.raises(SiteParseError, match="结构无法识别"):
@@ -110,18 +117,40 @@ def test_rank_uses_normal_thread_order_and_rejects_unknown_markup() -> None:
 
 def test_rank_reloads_once_when_the_forum_returns_an_incomplete_200_page() -> None:
     forum_url = "https://example.test/forum-56-1.html"
+    fallback_url = "https://example.test/forum.php?mod=forumdisplay&fid=56&page=1"
     transport = FakeTransport(
         {
-            forum_url: [
-                '<html><a href="thread-7-1-1.html">navigation only</a></html>',
-                '<tbody id="normalthread_7"></tbody><tbody id="normalthread_42"></tbody>',
-            ]
+            forum_url: '<html><a href="thread-7-1-1.html">navigation only</a></html>',
+            fallback_url: (
+                '<tbody id="normalthread_7"></tbody><tbody id="normalthread_42"></tbody>'
+            ),
         }
     )
     site = KLPBBSAdapter(config(), transport, base_url="https://example.test")
 
     assert site.get_thread_rank() == 2
-    assert [call[1] for call in transport.calls] == [forum_url, forum_url]
+    assert [call[1] for call in transport.calls] == [forum_url, fallback_url]
+
+
+def test_rank_falls_back_to_discuz_subject_links_when_row_ids_are_absent() -> None:
+    forum_url = "https://example.test/forum-56-1.html"
+    html = """
+        <table id="threadlisttableid">
+          <tbody><tr><th class="new">
+            <a class="s xst" href="thread-7-1-1.html">A</a>
+          </th></tr></tbody>
+          <tbody><tr><th class="new">
+            <a class="s xst" href="forum.php?mod=viewthread&amp;tid=42">B</a>
+          </th></tr></tbody>
+        </table>
+    """
+    site = KLPBBSAdapter(
+        config(),
+        FakeTransport({forum_url: html}),
+        base_url="https://example.test",
+    )
+
+    assert site.get_thread_rank() == 2
 
 
 def test_inventory_distinguishes_explicitly_empty_from_unparseable() -> None:

@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup, Tag
 from ..config import SiteConfig
 from ..models import ActionResult, ActionStatus, Inventory, Resources
 from ..promotion_proxy import PromotionVisitor
+from ..step_log import log_step
 from ..transport import HttpTransport
 from .base import SiteParseError
 
@@ -260,14 +261,35 @@ class KLPBBSAdapter:
 
     def get_thread_rank(self) -> int:
         ids: list[str] = []
-        for _attempt in range(2):
-            page = self.transport.get(self._url("forum-56-1.html"))
+        forum_paths = (
+            "forum-56-1.html",
+            "forum.php?mod=forumdisplay&fid=56&page=1",
+        )
+        for forum_path in forum_paths:
+            page = self.transport.get(self._url(forum_path))
             soup = BeautifulSoup(page.text, "html.parser")
             ids = [
                 match.group(1)
                 for node in soup.select('[id^="normalthread_"]')
                 if (match := re.fullmatch(r"normalthread_(\d+)", str(node.get("id", ""))))
             ]
+            if not ids:
+                ids = [
+                    match.group(1)
+                    for node in soup.select("#threadlisttableid th.new a.xst[href]")
+                    if (
+                        match := re.search(
+                            r"(?:thread-|[?&]tid=)(\d+)(?:-|(?:&|$))",
+                            str(node.get("href", "")),
+                        )
+                    )
+                ]
+            log_step(
+                "rank_page_parse",
+                site=self.name,
+                status="completed" if ids else "incomplete",
+                normal_thread_count=len(ids),
+            )
             if ids:
                 break
         if not ids:

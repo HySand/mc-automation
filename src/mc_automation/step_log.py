@@ -20,6 +20,7 @@ ALLOWED_METADATA_KEYS = frozenset(
         "action",
         "adapter_count",
         "already_clear",
+        "attempts",
         "browser_fallback",
         "challenge_count",
         "challenge_kind",
@@ -55,6 +56,7 @@ ALLOWED_METADATA_KEYS = frozenset(
         "method",
         "model",
         "navigation_timeout_ms",
+        "normal_thread_count",
         "owned",
         "path_points",
         "rank",
@@ -77,6 +79,7 @@ ALLOWED_METADATA_KEYS = frozenset(
         "threshold",
         "track_width",
         "url",
+        "visits",
     }
 )
 
