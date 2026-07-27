@@ -360,6 +360,18 @@ def test_esa_slider_defaults_generate_a_dense_cubic_bezier_path() -> None:
     assert all(first[0] <= second[0] for first, second in zip(samples, samples[1:], strict=False))
 
 
+def test_cloakbrowser_drag_uses_unwrapped_mouse_when_humanize_is_enabled() -> None:
+    patched_mouse = object()
+    raw_mouse = object()
+    page = SimpleNamespace(mouse=patched_mouse, _human_raw_mouse=raw_mouse)
+
+    assert EsaSliderChallengeResolver._raw_playwright_mouse(page) is raw_mouse
+    assert (
+        EsaSliderChallengeResolver._raw_playwright_mouse(SimpleNamespace(mouse=patched_mouse))
+        is patched_mouse
+    )
+
+
 def test_bezier_path_has_a_smooth_bounded_vertical_curve() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(19))
 
@@ -412,6 +424,56 @@ def test_page_is_clear_when_passive_marker_remains_after_slider_navigation() -> 
     assert asyncio.run(
         EsaSliderChallengeResolver._page_is_clear(
             NavigatedTab(), expected_url="https://example.test/login/login"
+        )
+    )
+
+
+def test_page_is_clear_when_login_page_contains_generic_security_copy() -> None:
+    class LoginTab:
+        frames: list[object] = []
+        evaluated_script = ""
+
+        async def content(self) -> str:
+            return "<html><body>安全验证设置</body></html>"
+
+        async def evaluate(self, script: str) -> dict[str, object]:
+            self.evaluated_script = script
+            return {
+                "slider": False,
+                "title": "登录 | MineBBS 我的世界中文论坛",
+                "href": "https://example.test/login/login?u_atoken=redacted",
+                "readyState": "complete",
+                "hasBody": True,
+            }
+
+    tab = LoginTab()
+    assert asyncio.run(
+        EsaSliderChallengeResolver._page_is_clear(
+            tab, expected_url="https://example.test/login/login"
+        )
+    )
+    assert tab.evaluated_script.endswith("hasBody:!!document.body})")
+
+
+def test_page_is_not_clear_when_real_esa_title_remains_without_slider_dom() -> None:
+    class ChallengeTab:
+        frames: list[object] = []
+
+        async def content(self) -> str:
+            return "<html><body>安全验证</body></html>"
+
+        async def evaluate(self, _script: str) -> dict[str, object]:
+            return {
+                "slider": False,
+                "title": "滑动验证页面",
+                "href": "https://example.test/login/login",
+                "readyState": "complete",
+                "hasBody": True,
+            }
+
+    assert not asyncio.run(
+        EsaSliderChallengeResolver._page_is_clear(
+            ChallengeTab(), expected_url="https://example.test/login/login"
         )
     )
 

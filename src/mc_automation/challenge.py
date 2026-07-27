@@ -26,6 +26,8 @@ class EsaSliderChallengeResolver:
 
     HANDLE_SELECTOR = "#aliyunCaptcha-sliding-slider"
     TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"
+    CLEAR_PAGE_MARKERS = ("aliyunCaptcha", "captcha-element", "安全验证")
+    CHALLENGE_TITLES = ("滑动验证页面",)
     HORIZONTAL_GRAB_RANGE = (0.22, 0.78)
     VERTICAL_GRAB_RANGE = (0.28, 0.72)
     END_OVERSHOOT_RANGE = (0.36, 0.40)
@@ -532,6 +534,7 @@ class EsaSliderChallengeResolver:
             await self._log_playwright_page_state(page)
             log_step("esa_dom_geometry", site="minebbs", status="failed", resolved=False)
             return False
+        mouse = self._raw_playwright_mouse(page)
         handle_width = float(handle_box["width"])
         handle_height = float(handle_box["height"])
         track_width = float(track_box["width"])
@@ -566,15 +569,15 @@ class EsaSliderChallengeResolver:
             await self._wait_for_drag_deadline(
                 approach_started, self.APPROACH_DURATION_MS * step / len(approach)
             )
-            await page.mouse.move(x, y)
-        await page.mouse.down()
+            await mouse.move(x, y)
+        await mouse.down()
         drag_started = self._monotonic()
         deadlines = self._humanized_drag_deadlines(
             len(drag_path), duration_ms=self.drag_duration_ms
         )
         for step, (x, y) in enumerate(drag_path, 1):
             await self._wait_for_drag_deadline(drag_started, deadlines[step - 1])
-            await page.mouse.move(x, y)
+            await mouse.move(x, y)
         log_step(
             "esa_drag",
             site="minebbs",
@@ -584,6 +587,12 @@ class EsaSliderChallengeResolver:
             distance=round(distance, 2),
         )
         return True
+
+    @staticmethod
+    def _raw_playwright_mouse(page: Any) -> Any:
+        """Avoid expanding every sampled ESA point into another humanized trajectory."""
+
+        return getattr(page, "_human_raw_mouse", page.mouse)
 
     @staticmethod
     async def _settle_playwright_page(page: Any) -> None:
@@ -993,12 +1002,14 @@ class EsaSliderChallengeResolver:
         except Exception:
             return False
         challenge = detect_security_challenge(200, content)
-        if challenge not in (None, "security challenge marker: aliyunCaptcha"):
+        if challenge is not None and not any(
+            marker.casefold() in challenge.casefold() for marker in cls.CLEAR_PAGE_MARKERS
+        ):
             return False
         script = (
             f"({{slider:!!document.querySelector({cls.HANDLE_SELECTOR!r}),"
             "title:document.title,href:location.href,readyState:document.readyState,"
-            "hasBody:!!document.body}})"
+            "hasBody:!!document.body})"
         )
         try:
             if callable(content_method):
@@ -1025,7 +1036,7 @@ class EsaSliderChallengeResolver:
         ready_state = str(parsed.get("readyState", ""))
         return (
             not bool(parsed.get("slider"))
-            and "滑动验证页面" not in title
+            and not any(marker in title for marker in cls.CHALLENGE_TITLES)
             and ready_state != "loading"
             and bool(parsed.get("hasBody"))
             and cls._is_same_origin(href, expected_url)

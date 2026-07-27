@@ -279,8 +279,9 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   `target_elapsed = drag_duration_ms * step / drag_steps`; the resolver waits for that deadline before
   sending the corresponding CDP event. Do not add a fixed delay after every browser protocol call,
   because cross-process call overhead otherwise stretches a configured drag once per event. The resolver
-  uses low-level `Input.dispatchMouseEvent`; CloakBrowser's high-level `mouse_move()` helper is not used
-  because it releases the button after each move.
+  uses CloakBrowser's exposed raw Playwright mouse; its humanized `page.mouse.move()` wrapper is not
+  used because wrapping every sampled Bezier point expands one intended trajectory into dozens of
+  nested trajectories. The legacy nodriver path continues to use low-level `Input.dispatchMouseEvent`.
 - Movement deadlines are irregular rather than evenly spaced. The complete injected input sequence
   is unheld approach `mouseMoved` events (`button=none, buttons=0`), one `mousePressed` event
   (`button=left, buttons=1`), then held `mouseMoved` events (`button=none, buttons=1`). Do not inject
@@ -302,6 +303,10 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   the title has left the verification page, the document has a body and has finished loading on the
   expected origin, and browser cleanup succeeds. `about:blank`, browser error pages, cross-origin
   redirects, and uninitialized documents never count as clearance merely because no slider exists.
+  The Playwright clearance expression must be executed by a real JavaScript engine in regression
+  coverage; mocks that accept arbitrary strings cannot detect malformed object-literal syntax. Generic
+  `安全验证` copy may remain on the normal MineBBS login page, so clearance is structural: no slider in
+  any live frame, a non-challenge title, a loaded body, and the expected origin.
 
 ### 4. Validation & Error Matrix
 
