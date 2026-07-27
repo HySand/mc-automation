@@ -11,8 +11,7 @@ from typing import Literal, Protocol
 from urllib.parse import parse_qs, urlsplit
 
 import requests
-from requests.exceptions import ConnectionError as RequestsConnectionError
-from requests.exceptions import ProxyError, SSLError, Timeout
+from requests.exceptions import RequestException
 from urllib3 import disable_warnings
 from urllib3.exceptions import InsecureRequestWarning
 
@@ -368,7 +367,7 @@ class ProxyPromotionVisitor:
                 content_length=len(response.content),
             )
             return success
-        except (ProxyError, RequestsConnectionError, Timeout, SSLError):
+        except RequestException:
             log_step(
                 "promotion_proxy_visit",
                 site="klpbbs",

@@ -289,6 +289,22 @@ def test_proxy_visitor_rejects_non_200_response() -> None:
     assert not visitor.visit("https://klpbbs.com/?fromuid=5")
 
 
+def test_proxy_visitor_isolates_truncated_proxy_response() -> None:
+    class TruncatedResponse(StubResponse):
+        @property
+        def content(self) -> bytes:
+            raise requests.exceptions.ChunkedEncodingError("truncated proxy response")
+
+    session = VisitSession(TruncatedResponse(b"partial"))
+    visitor = ProxyPromotionVisitor(
+        StaticPool(("http://8.8.8.8:8080",)),
+        session_factory=lambda: session,
+    )
+
+    assert not visitor.visit("https://klpbbs.com/?fromuid=5")
+    assert session.closed
+
+
 def test_proxy_visitor_processes_one_concurrent_batch_and_reports_exhaustion() -> None:
     queued_sessions = [
         VisitSession(StubResponse(b"")),

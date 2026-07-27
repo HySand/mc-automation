@@ -60,8 +60,9 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   verification. Matching the reference implementation, a response counts as a transport success
   when it is HTTP 200; KLPBBS may consume `fromuid` and rewrite the final landing URL. This transport
   result only triggers an authenticated task-progress read and never proves task completion itself.
-- A proxy timeout is an expected failed
-  candidate: it consumes that proxy and immediately advances to the next one.
+- Any `requests` transport failure from an untrusted proxy, including timeout, connection, TLS,
+  proxy, and truncated/chunked response errors, is an expected failed candidate: it consumes that
+  proxy and immediately advances to the next one without failing the KLPBBS adapter.
 - The pool globally deduplicates every candidate returned by the bounded finite sources and shuffles
   within each source. It preserves source order so fresh checked lists are consumed before older
   aggregates. It has no global candidate count or per-source quota. A source failure is isolated;
