@@ -61,6 +61,9 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   cross-origin, or excessive redirects fail that candidate.
 - Free proxy probes use a short `2s` connect and `5s` read timeout. A timeout is an expected failed
   candidate: it consumes that proxy and immediately advances to the next one.
+- The pool globally deduplicates up to 2,000 candidates and does not impose a per-source quota.
+  A source failure is isolated; otherwise all valid candidates from that source remain eligible
+  until the global limit or task completion.
 - KLPBBS promotion uses stable task ID `1`, and the doing-task list is
   `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
   the click target because the task center does not necessarily render a per-account promotion URL.

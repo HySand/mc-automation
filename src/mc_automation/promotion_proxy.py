@@ -16,7 +16,7 @@ from requests.exceptions import ProxyError, SSLError, Timeout
 from .step_log import log_step
 from .transport import TransportError
 
-DEFAULT_PROXY_LIMIT = 500
+DEFAULT_PROXY_LIMIT = 2_000
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 DEFAULT_PROXY_WORKERS = 20
 MAX_PROMOTION_REDIRECTS = 3
@@ -207,7 +207,7 @@ class DynamicProxyPool:
         candidate_limit: int = DEFAULT_PROXY_LIMIT,
         source_timeout: tuple[float, float] = (5.0, 15.0),
         source_max_bytes: int = DEFAULT_SOURCE_MAX_BYTES,
-        per_source_limit: int = 100,
+        per_source_limit: int | None = None,
     ) -> None:
         self.sources = tuple(default_proxy_sources() if sources is None else sources)
         self.session = session or requests.Session()
@@ -244,7 +244,9 @@ class DynamicProxyPool:
                         before = len(unique)
                         unique.setdefault(proxy, None)
                         source_added += len(unique) - before
-                    if len(unique) >= self.candidate_limit or source_added >= self.per_source_limit:
+                    if len(unique) >= self.candidate_limit or (
+                        self.per_source_limit is not None and source_added >= self.per_source_limit
+                    ):
                         break
             except (
                 requests.RequestException,

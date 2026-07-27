@@ -139,6 +139,20 @@ def test_dynamic_pool_caps_each_source_to_preserve_source_diversity() -> None:
     )
 
 
+def test_dynamic_pool_has_no_default_per_source_quota() -> None:
+    source_url = "https://source.invalid/all"
+    session = SourceSession(
+        {source_url: StubResponse(b"8.8.8.8:80\n1.1.1.1:80\n9.9.9.9:80\n208.67.222.222:80\n")}
+    )
+    pool = DynamicProxyPool(
+        sources=(ProxySource("all", source_url),),
+        session=session,
+        candidate_limit=4,
+    )
+
+    assert len(pool.load()) == 4
+
+
 def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> None:
     queued_sessions = [
         VisitSession(StubResponse(b"")),
