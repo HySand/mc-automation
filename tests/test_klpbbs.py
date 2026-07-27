@@ -404,3 +404,29 @@ def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
     assert result.status is ActionStatus.SUCCESS
     assert not visitor.urls
     assert [call[1] for call in transport.calls] == [task_url, apply_url, doing_url, draw_url]
+
+
+def test_promotion_confirms_opaque_draw_by_rechecking_doing_tasks() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    transport = FakeTransport(
+        {
+            task_url: (
+                '<div>推广任务 已完成 <a href="home.php?mod=task&do=draw&id=1">领取奖励</a></div>'
+            ),
+            draw_url: "opaque response",
+            doing_url: "<h1>进行中的任务</h1><p>暂无任务</p>",
+        }
+    )
+    adapter = KLPBBSAdapter(
+        replace(promotion_config(), promotion_url="https://example.test/?fromuid=5"),
+        transport,
+        base_url="https://example.test",
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert result.metadata["visits"] == 0
+    assert [call[1] for call in transport.calls] == [task_url, draw_url, doing_url]

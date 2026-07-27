@@ -152,6 +152,23 @@ class KLPBBSAdapter:
                 "推广任务已完成并领取奖励",
                 metadata=metadata,
             )
+        doing_page = self.transport.get(self._url("home.php?mod=task&item=doing"))
+        doing_soup = BeautifulSoup(doing_page.text, "html.parser")
+        task_one_remains = any(
+            parse_qs(urlsplit(str(anchor.get("href", ""))).query).get("id") == ["1"]
+            for anchor in doing_soup.select('a[href*="mod=task"][href*="id=1"]')
+        )
+        if not task_one_remains:
+            metadata = {"visits": visits}
+            if attempts is not None:
+                metadata["attempts"] = attempts
+            return ActionResult(
+                self.name,
+                "promotion_task",
+                ActionStatus.SUCCESS,
+                "推广任务已从进行中列表消失，领奖完成",
+                metadata=metadata,
+            )
         return self._result(
             "promotion_task", ActionStatus.TECHNICAL_FAILURE, "推广任务领奖结果无法确认"
         )

@@ -55,6 +55,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - KLPBBS promotion uses stable task ID `1`, and the doing-task list is
   `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
   the click target because the task center does not necessarily render a per-account promotion URL.
+- A draw response may be opaque. It counts as successful only when it contains a known success
+  marker or one fresh authenticated `item=doing` read proves task ID 1 has disappeared.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
 - If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium once.
