@@ -11,7 +11,7 @@
 - 每个站点每轮最多完成一次购买/使用事务；状态丢失时先保守地执行登录、签到和读取检查。
 - 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点立即停止并报告 `manual_intervention`；连续三次挑战会暂停 24 小时。
 - KLPBBS 使用独立的 `cloudscraper` 会话；其他站点继续使用普通 `requests` 会话，所有响应仍经过统一挑战检测。
-- KLPBBS 推广任务参考 `klpAutomation`，并优先加入每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；从全部有限代理源收集、全局去重并随机打散候选，每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。
+- KLPBBS 推广任务参考 `klpAutomation`，并优先消费每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；每个来源内部随机打散，来源之间保持新鲜度优先级，全局去重后每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。
 - MineBBS ESA 滑块可选使用 `nodriver` 读取滑块与轨道的 DOM 几何信息，并通过 CDP 鼠标事件拖到末端；不截图、不调用 AI。WDSJFWQ 图片验证码仍可独立启用 OpenAI-compatible 视觉模型。
 
 ## 配置
@@ -91,4 +91,4 @@ WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只�
 
 运行时还会输出逐步 JSONL 日志，覆盖配置、状态、各站点动作、HTTP、WDSJFWQ 验证码图片下载/AI 识别/表单提交/计数确认，以及 MineBBS ESA 浏览器/DOM/拖动/清理流程。URL 仅保留 scheme、host、port 和 path；日志只记录字段名、状态、数量及耗时，不记录表单值、验证码文本、图片 Base64、AI endpoint/key 或原始响应正文。
 
-普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie 或 CSRF token，使用参考项目的浏览器 `User-Agent` 和同源首页 `Referer`，且不关闭 TLS 校验。Discuz 根推广链接可能经过站内 301 才会计数，因此程序手动跟随最多 3 次严格同源跳转，任何跨域、缺少 `Location` 或超限跳转均拒绝。`KLPBBS_PROMOTION_URL` 必须与 `KLPBBS_BASE_URL` 同源。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。
+普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie 或 CSRF token。点击请求忠实采用参考项目的浏览器 `User-Agent`、同源首页 `Referer`、10 秒超时、自动跳转与代理兼容 TLS 行为。程序另外校验最终响应仍属于 KLPBBS 且保留 `fromuid` 参数，日志记录去除查询参数后的最终落点、跳转数、响应大小和两项校验结果；只有通过这些校验的 HTTP 200 才计为代理访问成功。`KLPBBS_PROMOTION_URL` 必须与 `KLPBBS_BASE_URL` 同源。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。

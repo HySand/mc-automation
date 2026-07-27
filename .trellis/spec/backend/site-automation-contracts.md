@@ -52,17 +52,18 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Only KLPBBS promotion-link clicks use the dynamic HTTP proxy pool. Proxy-source downloads,
   authenticated promotion task operations, and every other site request continue through WARP.
 - A promotion click uses a fresh session with `trust_env=False`, cleared cookies, explicit
-  `http`/`https` proxy arguments, TLS verification enabled, and the reference client's browser
+  `http`/`https` proxy arguments, and the reference client's browser
   `User-Agent`, HTML `Accept`, and same-origin homepage `Referer`. It carries no authenticated
   Cookie or CSRF token. The adapter validates the initial
-  promotion URL before passing it to the visitor. Discuz `index.php` redirects root promotion URLs
-  before `misc_promotion.php` records the source IP, so the visitor manually follows at most three
-  strictly same-origin redirects while keeping `requests` automatic redirects disabled. Missing,
-  cross-origin, or excessive redirects fail that candidate.
-- Free proxy probes use a short `2s` connect and `5s` read timeout. A timeout is an expected failed
+  promotion URL before passing it to the visitor. The click request mirrors the known-working
+  reference: a 10-second timeout, automatic redirects, and proxy-compatible disabled certificate
+  verification. A response counts as a transport success only when it is HTTP 200, its final host
+  remains the configured KLPBBS host, and its final query still contains `fromuid`.
+- A proxy timeout is an expected failed
   candidate: it consumes that proxy and immediately advances to the next one.
-- The pool globally deduplicates and randomly shuffles every candidate returned by the bounded
-  finite sources. It has no global candidate count or per-source quota. A source failure is isolated;
+- The pool globally deduplicates every candidate returned by the bounded finite sources and shuffles
+  within each source. It preserves source order so fresh checked lists are consumed before older
+  aggregates. It has no global candidate count or per-source quota. A source failure is isolated;
   otherwise all valid candidates from that source remain eligible until task completion or natural
   pool exhaustion.
 - Fresh checked sources (`openproxylist-https`, `yakumo-http-checked`, and `kangproxy-https`) are

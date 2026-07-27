@@ -8,23 +8,27 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal, Protocol
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import ProxyError, SSLError, Timeout
+from urllib3 import disable_warnings
+from urllib3.exceptions import InsecureRequestWarning
 
 from .step_log import log_step
 from .transport import TransportError
 
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 DEFAULT_PROXY_WORKERS = 20
-MAX_PROMOTION_REDIRECTS = 3
 PROMOTION_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 "
     "Safari/537.36 Edg/116.0.1938.81"
 )
+
+# The reference client disables certificate checks for public proxy compatibility.
+disable_warnings(InsecureRequestWarning)
 
 
 class ProxyPoolExhausted(TransportError):
@@ -72,7 +76,7 @@ def default_proxy_sources(today: date | None = None) -> tuple[ProxySource, ...]:
         )
         for offset in range(1, 8)
     )
-    return checker_sources + (
+    fresh_sources = (
         ProxySource(
             "openproxylist-https",
             "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt",
@@ -86,41 +90,47 @@ def default_proxy_sources(today: date | None = None) -> tuple[ProxySource, ...]:
             "kangproxy-https",
             "https://raw.githubusercontent.com/officialputuid/KangProxy/main/https/https.txt",
         ),
-        ProxySource(
-            "proxyscrape",
-            "https://api.proxyscrape.com/v2/",
-            params={
-                "request": "getproxies",
-                "protocol": "http",
-                "timeout": 2000,
-                "country": "all",
-            },
-        ),
-        ProxySource(
-            "proxy-list.download",
-            "https://www.proxy-list.download/api/v1/get",
-            params={"type": "http"},
-        ),
-        ProxySource(
-            "geonode",
-            "https://proxylist.geonode.com/api/proxy-list",
-            "geonode",
-            {
-                "limit": 300,
-                "page": 1,
-                "sort_by": "lastChecked",
-                "sort_type": "desc",
-                "protocols": "http",
-            },
-        ),
-        ProxySource(
-            "speedx",
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
-        ),
-        ProxySource(
-            "monosans",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
-        ),
+    )
+    return (
+        fresh_sources
+        + checker_sources
+        + (
+            ProxySource(
+                "proxyscrape",
+                "https://api.proxyscrape.com/v2/",
+                params={
+                    "request": "getproxies",
+                    "protocol": "http",
+                    "timeout": 2000,
+                    "country": "all",
+                },
+            ),
+            ProxySource(
+                "proxy-list.download",
+                "https://www.proxy-list.download/api/v1/get",
+                params={"type": "http"},
+            ),
+            ProxySource(
+                "geonode",
+                "https://proxylist.geonode.com/api/proxy-list",
+                "geonode",
+                {
+                    "limit": 300,
+                    "page": 1,
+                    "sort_by": "lastChecked",
+                    "sort_type": "desc",
+                    "protocols": "http",
+                },
+            ),
+            ProxySource(
+                "speedx",
+                "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+            ),
+            ProxySource(
+                "monosans",
+                "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
+            ),
+        )
     )
 
 
@@ -150,18 +160,6 @@ def normalize_http_proxy(raw: str) -> str | None:
         return None
     host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     return f"http://{host}:{parsed.port}"
-
-
-def _same_origin(first: str, second: str) -> bool:
-    left = urlsplit(first)
-    right = urlsplit(second)
-    left_port = left.port or (443 if left.scheme == "https" else 80)
-    right_port = right.port or (443 if right.scheme == "https" else 80)
-    return (
-        left.scheme.casefold() == right.scheme.casefold()
-        and left.hostname == right.hostname
-        and left_port == right_port
-    )
 
 
 def _proxy_values(payload: bytes, source: ProxySource) -> Iterable[str]:
@@ -239,8 +237,10 @@ class DynamicProxyPool:
             return self._loaded
 
         unique: dict[str, None] = {}
+        candidates: list[str] = []
         for source in self.sources:
             source_added = 0
+            source_candidates: list[str] = []
             try:
                 response = self.session.get(
                     source.url,
@@ -258,7 +258,9 @@ class DynamicProxyPool:
                     if proxy is not None:
                         before = len(unique)
                         unique.setdefault(proxy, None)
-                        source_added += len(unique) - before
+                        if len(unique) > before:
+                            source_candidates.append(proxy)
+                            source_added += 1
                     if (
                         self.candidate_limit is not None and len(unique) >= self.candidate_limit
                     ) or (
@@ -280,6 +282,8 @@ class DynamicProxyPool:
                     proxy_count=source_added,
                 )
                 continue
+            self.random_source.shuffle(source_candidates)
+            candidates.extend(source_candidates)
             log_step(
                 "promotion_proxy_source",
                 site="klpbbs",
@@ -292,8 +296,6 @@ class DynamicProxyPool:
 
         if not unique:
             raise ProxyPoolExhausted("所有动态代理源均不可用或未返回有效公共 HTTP 代理")
-        candidates = list(unique)
-        self.random_source.shuffle(candidates)
         self._loaded = tuple(candidates)
         return self._loaded
 
@@ -304,7 +306,7 @@ class ProxyPromotionVisitor:
         pool: ProxyPool,
         *,
         session_factory: Callable[[], requests.Session] = requests.Session,
-        timeout: tuple[float, float] = (2.0, 5.0),
+        timeout: float = 10.0,
         workers: int = DEFAULT_PROXY_WORKERS,
     ) -> None:
         self.pool = pool
@@ -336,45 +338,32 @@ class ProxyPromotionVisitor:
             }
         )
         response: requests.Response | None = None
-        current_url = promotion_url
-        redirect_count = 0
         try:
-            while True:
-                response = session.get(
-                    current_url,
-                    proxies={"http": proxy, "https": proxy},
-                    timeout=self.timeout,
-                    allow_redirects=False,
-                    verify=True,
-                    stream=True,
-                )
-                if not response.is_redirect:
-                    break
-                location = response.headers.get("Location")
-                next_url = urljoin(current_url, location) if location else ""
-                if (
-                    not next_url
-                    or not _same_origin(promotion_url, next_url)
-                    or redirect_count >= MAX_PROMOTION_REDIRECTS
-                ):
-                    break
-                response.close()
-                response = None
-                current_url = next_url
-                redirect_count += 1
-
-            success = (
-                response is not None
-                and not response.is_redirect
-                and 200 <= response.status_code < 300
+            # Match the known-working reference request before applying stricter result checks.
+            response = session.get(
+                promotion_url,
+                proxies={"http": proxy, "https": proxy},
+                timeout=self.timeout,
+                allow_redirects=True,
+                verify=False,
             )
+            original = urlsplit(promotion_url)
+            final = urlsplit(response.url)
+            same_host = final.hostname == original.hostname
+            fromuid_preserved = bool(parse_qs(final.query).get("fromuid"))
+            success = response.status_code == 200 and same_host and fromuid_preserved
             log_step(
                 "promotion_proxy_visit",
                 site="klpbbs",
                 status="completed" if success else "failed",
                 action=attempt,
-                status_code=response.status_code if response is not None else None,
-                redirect_count=redirect_count,
+                status_code=response.status_code,
+                redirect_count=len(response.history),
+                redirect_target=response.url,
+                promotion_parameter_preserved=fromuid_preserved,
+                final_origin_matches=same_host,
+                content_type=response.headers.get("Content-Type"),
+                content_length=len(response.content),
             )
             return success
         except (ProxyError, RequestsConnectionError, Timeout, SSLError):

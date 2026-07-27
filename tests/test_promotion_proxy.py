@@ -22,6 +22,8 @@ class StubResponse:
     status_code: int = 200
     headers: dict[str, str] = field(default_factory=dict)
     closed: bool = False
+    url: str = "https://klpbbs.com/forum.php?fromuid=5"
+    history: list[StubResponse] = field(default_factory=list)
 
     @property
     def is_redirect(self) -> bool:
@@ -33,6 +35,10 @@ class StubResponse:
 
     def iter_content(self, *, chunk_size: int) -> list[bytes]:
         return [self.body]
+
+    @property
+    def content(self) -> bytes:
+        return self.body
 
     def close(self) -> None:
         self.closed = True
@@ -95,6 +101,9 @@ def test_normalize_http_proxy_accepts_only_public_ip_literal_endpoints() -> None
 def test_default_sources_prioritize_fresh_checked_proxy_lists() -> None:
     names = [source.name for source in default_proxy_sources()]
 
+    assert names.index("openproxylist-https") < names.index("checkerproxy")
+    assert names.index("yakumo-http-checked") < names.index("checkerproxy")
+    assert names.index("kangproxy-https") < names.index("checkerproxy")
     assert names.index("openproxylist-https") < names.index("proxyscrape")
     assert names.index("yakumo-http-checked") < names.index("proxyscrape")
     assert names.index("kangproxy-https") < names.index("proxyscrape")
@@ -179,7 +188,27 @@ def test_dynamic_pool_has_no_default_global_candidate_limit() -> None:
     assert len(pool.load()) == 600
 
 
-def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> None:
+def test_dynamic_pool_preserves_source_priority_while_shuffling_within_source() -> None:
+    first_url = "https://source.invalid/fresh"
+    second_url = "https://source.invalid/old"
+    session = SourceSession(
+        {
+            first_url: StubResponse(b"8.8.8.8:80\n1.1.1.1:80\n"),
+            second_url: StubResponse(b"9.9.9.9:80\n208.67.222.222:80\n"),
+        }
+    )
+    pool = DynamicProxyPool(
+        sources=(ProxySource("fresh", first_url), ProxySource("old", second_url)),
+        session=session,
+        random_source=random.Random(0),
+    )
+
+    loaded = pool.load()
+    assert set(loaded[:2]) == {"http://8.8.8.8:80", "http://1.1.1.1:80"}
+    assert set(loaded[2:]) == {"http://9.9.9.9:80", "http://208.67.222.222:80"}
+
+
+def test_proxy_visitor_matches_reference_request_behavior() -> None:
     queued_sessions = [
         VisitSession(StubResponse(b"")),
         VisitSession(StubResponse(b"")),
@@ -217,22 +246,17 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
     assert all(session.headers["Referer"] == "https://klpbbs.com/" for session in created_sessions)
     assert all("Mozilla/5.0" in session.headers["User-Agent"] for session in created_sessions)
     assert all(
-        call[1]["allow_redirects"] is False
-        for session in created_sessions
-        for call in session.calls
+        call[1]["allow_redirects"] is True for session in created_sessions for call in session.calls
     )
-    assert all(call[1]["verify"] is True for session in created_sessions for call in session.calls)
-    assert all(
-        call[1]["timeout"] == (2.0, 5.0) for session in created_sessions for call in session.calls
-    )
+    assert all(call[1]["verify"] is False for session in created_sessions for call in session.calls)
+    assert all(call[1]["timeout"] == 10.0 for session in created_sessions for call in session.calls)
 
 
-def test_proxy_visitor_rejects_redirects_without_following_them() -> None:
+def test_proxy_visitor_rejects_cross_origin_final_response() -> None:
     session = VisitSession(
         StubResponse(
             b"",
-            status_code=302,
-            headers={"Location": "https://outside.example/landing"},
+            url="https://outside.example/landing?fromuid=5",
         )
     )
     visitor = ProxyPromotionVisitor(
@@ -241,31 +265,18 @@ def test_proxy_visitor_rejects_redirects_without_following_them() -> None:
     )
 
     assert not visitor.visit("https://klpbbs.com/promotion?fromuid=5")
-    assert session.calls[0][1]["allow_redirects"] is False
+    assert session.calls[0][1]["allow_redirects"] is True
 
 
-def test_proxy_visitor_manually_follows_same_origin_promotion_redirect() -> None:
-    session = VisitSession(
-        [
-            StubResponse(
-                b"",
-                status_code=301,
-                headers={"Location": "/forum.php?fromuid=5"},
-            ),
-            StubResponse(b"landing"),
-        ]
-    )
+def test_proxy_visitor_requires_promotion_parameter_on_final_response() -> None:
+    session = VisitSession(StubResponse(b"landing", url="https://klpbbs.com/forum.php"))
     visitor = ProxyPromotionVisitor(
         StaticPool(("http://8.8.8.8:8080",)),
         session_factory=lambda: session,
     )
 
-    assert visitor.visit("https://klpbbs.com/?fromuid=5")
-    assert [call[0] for call in session.calls] == [
-        "https://klpbbs.com/?fromuid=5",
-        "https://klpbbs.com/forum.php?fromuid=5",
-    ]
-    assert all(call[1]["allow_redirects"] is False for call in session.calls)
+    assert not visitor.visit("https://klpbbs.com/?fromuid=5")
+    assert [call[0] for call in session.calls] == ["https://klpbbs.com/?fromuid=5"]
 
 
 def test_proxy_visitor_processes_one_concurrent_batch_and_reports_exhaustion() -> None:
