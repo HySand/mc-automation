@@ -416,7 +416,10 @@ def test_promotion_confirms_opaque_draw_by_rechecking_doing_tasks() -> None:
                 '<div>推广任务 已完成 <a href="home.php?mod=task&do=draw&id=1">领取奖励</a></div>'
             ),
             draw_url: "opaque response",
-            doing_url: "<h1>进行中的任务</h1><p>暂无任务</p>",
+            doing_url: (
+                "<h1>进行中的任务</h1><p>暂无任务</p>"
+                '<a href="home.php?mod=task&do=apply&id=1">再次申请</a>'
+            ),
         }
     )
     adapter = KLPBBSAdapter(
@@ -430,3 +433,26 @@ def test_promotion_confirms_opaque_draw_by_rechecking_doing_tasks() -> None:
     assert result.status is ActionStatus.SUCCESS
     assert result.metadata["visits"] == 0
     assert [call[1] for call in transport.calls] == [task_url, draw_url, doing_url]
+
+
+def test_promotion_rejects_opaque_draw_when_draw_link_remains() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    task = '<a href="home.php?mod=task&do=draw&id=1">领取奖励</a>'
+    transport = FakeTransport(
+        {
+            task_url: f"<div>推广任务 已完成 {task}</div>",
+            draw_url: "opaque response",
+            doing_url: f"<div>推广任务 已完成 {task}</div>",
+        }
+    )
+    adapter = KLPBBSAdapter(
+        replace(promotion_config(), promotion_url="https://example.test/?fromuid=5"),
+        transport,
+        base_url="https://example.test",
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.TECHNICAL_FAILURE

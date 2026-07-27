@@ -56,7 +56,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
   the click target because the task center does not necessarily render a per-account promotion URL.
 - A draw response may be opaque. It counts as successful only when it contains a known success
-  marker or one fresh authenticated `item=doing` read proves task ID 1 has disappeared.
+  marker or one fresh authenticated `item=doing` read proves task ID 1's `do=draw` link has
+  disappeared. Other task ID 1 links, such as `do=apply`, do not mean the completed task remains.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
 - If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium once.

@@ -47,4 +47,5 @@ The previous value mistakenly stored as a marker was the real `PROMO_URL`. It is
 the required, same-origin `KLPBBS_PROMOTION_URL` configuration, while task apply/status/draw remain
 on the authenticated WARP transport and only the configured URL clicks use dynamic proxies.
 The draw endpoint can also return opaque HTML. The adapter now performs one authenticated
-`item=doing` confirmation and reports success only when task ID 1 is absent.
+`item=doing` confirmation and reports success only when task ID 1's `do=draw` link is absent;
+navigation or `do=apply` links with the same task ID are not treated as an incomplete draw.

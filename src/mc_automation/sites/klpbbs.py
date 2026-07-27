@@ -154,11 +154,12 @@ class KLPBBSAdapter:
             )
         doing_page = self.transport.get(self._url("home.php?mod=task&item=doing"))
         doing_soup = BeautifulSoup(doing_page.text, "html.parser")
-        task_one_remains = any(
-            parse_qs(urlsplit(str(anchor.get("href", ""))).query).get("id") == ["1"]
+        draw_link_remains = any(
+            self._task_action(str(anchor.get("href", "")), "draw")
+            and parse_qs(urlsplit(str(anchor.get("href", ""))).query).get("id") == ["1"]
             for anchor in doing_soup.select('a[href*="mod=task"][href*="id=1"]')
         )
-        if not task_one_remains:
+        if not draw_link_remains:
             metadata = {"visits": visits}
             if attempts is not None:
                 metadata["attempts"] = attempts
