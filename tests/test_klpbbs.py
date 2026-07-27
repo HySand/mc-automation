@@ -569,6 +569,30 @@ def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
     assert [call[1] for call in transport.calls] == [task_url, apply_url, doing_url, draw_url]
 
 
+def test_promotion_ignores_management_link_and_uses_configured_fromuid_url() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    configured_url = "https://example.test/?fromuid=5"
+    management_url = "home.php?mod=spacecp&ac=promotion"
+    task_html = (
+        '<a href="home.php?mod=task&do=draw&id=1">task 1</a>'
+        f'<a href="{management_url}">promotion management</a>'
+    )
+    transport = FakeTransport({task_url: task_html, doing_url: task_html})
+    visitor = FakePromotionVisitor([True])
+    adapter = KLPBBSAdapter(
+        replace(promotion_config(), promotion_url=configured_url),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SKIPPED
+    assert visitor.urls == [configured_url]
+
+
 def test_promotion_confirms_opaque_draw_by_rechecking_doing_tasks() -> None:
     task_url = "https://example.test/home.php?mod=task"
     draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"

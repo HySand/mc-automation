@@ -101,6 +101,8 @@ def test_normalize_http_proxy_accepts_only_public_ip_literal_endpoints() -> None
 def test_default_sources_prioritize_fresh_checked_proxy_lists() -> None:
     names = [source.name for source in default_proxy_sources()]
 
+    assert names.index("proxifly-http") < names.index("openproxylist-https")
+    assert names.index("proxifly-http") < names.index("checkerproxy")
     assert names.index("openproxylist-https") < names.index("checkerproxy")
     assert names.index("yakumo-http-checked") < names.index("checkerproxy")
     assert names.index("kangproxy-https") < names.index("checkerproxy")

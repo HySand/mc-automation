@@ -68,13 +68,17 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   aggregates. It has no global candidate count or per-source quota. A source failure is isolated;
   otherwise all valid candidates from that source remain eligible until task completion or natural
   pool exhaustion.
-- Fresh checked sources (`openproxylist-https`, `yakumo-http-checked`, and `kangproxy-https`) are
-  loaded before the reference project's older aggregate sources. The source URLs are finite static
-  files and remain subject to the same response-size, public-IP, port, deduplication, and timeout
-  checks.
+- Fresh checked sources (`proxifly-http`, `openproxylist-https`, `yakumo-http-checked`, and
+  `kangproxy-https`) are loaded before the reference project's older aggregate sources. The source
+  URLs are finite static files and remain subject to the same response-size, public-IP, port,
+  deduplication, and timeout checks. `proxifly-http` has a live acceptance probe proving one
+  configured `/?fromuid=...` visit advanced Discuz `#csc_1` from 0 to 10.
 - KLPBBS promotion uses stable task ID `1`, and the doing-task list is
   `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
   the click target because the task center does not necessarily render a per-account promotion URL.
+  A task-page `ac=promotion` link is an authenticated promotion-management page, not a public click
+  target, and must never override `KLPBBS_PROMOTION_URL`; only a discovered URL that itself contains
+  `fromuid` may be used when no configured URL exists.
 - Discuz renders authoritative task progress in `#csc_1`. A successful proxy HTTP response is only
   a candidate visit and must not be counted as task progress. An incomplete task may still expose a
   `do=draw&id=1` link with a `rewardless.gif`; draw is allowed only when `#csc_1` is at least 100 or

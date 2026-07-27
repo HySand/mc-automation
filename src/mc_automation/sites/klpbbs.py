@@ -133,7 +133,7 @@ class KLPBBSAdapter:
                 apply_url = self._url(href)
             elif self._task_action(href, "draw"):
                 draw_url = self._url(href)
-            elif "fromuid=" in href or "ac=promotion" in href or "promotion" in href.casefold():
+            elif "fromuid=" in href:
                 visit_url = self._url(href)
         progress = self._task_progress(scope, task_id)
         complete = (
@@ -238,11 +238,19 @@ class KLPBBSAdapter:
             return self._result(
                 "promotion_task", ActionStatus.SUCCESS, "推广任务已完成，页面未提供额外领奖动作"
             )
-        if task.visit_url is None:
+        if self.config.promotion_url:
             task = _PromotionTask(
                 task.apply_url,
                 task.draw_url,
-                self.config.promotion_url or None,
+                self.config.promotion_url,
+                task.complete,
+                task.progress_percent,
+            )
+        elif task.visit_url is None:
+            task = _PromotionTask(
+                task.apply_url,
+                task.draw_url,
+                None,
                 task.complete,
                 task.progress_percent,
             )

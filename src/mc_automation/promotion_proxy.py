@@ -77,6 +77,11 @@ def default_proxy_sources(today: date | None = None) -> tuple[ProxySource, ...]:
     )
     fresh_sources = (
         ProxySource(
+            "proxifly-http",
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/"
+            "main/proxies/protocols/http/data.txt",
+        ),
+        ProxySource(
             "openproxylist-https",
             "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt",
         ),
