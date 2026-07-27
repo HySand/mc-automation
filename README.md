@@ -13,7 +13,7 @@
 - KLPBBS 只有排名大于阈值（默认 `8`）后才会使用官方顶贴道具。
 - MineBBS 不使用排名作为门槛，两次成功顶贴默认间隔 16 小时。
 - 每个站点每轮最多完成一次购买/使用事务；状态丢失时先保守地执行登录、签到和读取检查。
-- 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点立即停止并报告 `manual_intervention`；连续三次挑战会暂停 24 小时。
+- 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点在本轮立即停止并报告 `manual_intervention`；后续调度仍会重新尝试，不写入跨运行暂停标记。
 - KLPBBS 使用独立的 `cloudscraper` 会话；其他站点继续使用普通 `requests` 会话，所有响应仍经过统一挑战检测。
 - KLPBBS 推广任务参考 `klpAutomation`，并优先消费每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；每个来源内部随机打散，来源之间保持新鲜度优先级，全局去重后每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。
 - MineBBS ESA 滑块可选使用 `nodriver` 读取滑块与轨道的 DOM 几何信息，并通过 CDP 鼠标事件拖到末端；不截图、不调用 AI。WDSJFWQ 图片验证码仍可独立启用 OpenAI-compatible 视觉模型。
@@ -83,7 +83,7 @@ AI_SOLVER_API_KEY=...
 AI_SOLVER_MODEL=gpt-4o-mini
 ```
 
-WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只返回 `{"code":"...","confidence":...}`，随后随机生成 `PlayerNNNNNN` 用户名提交点赞表单。MineBBS ESA 只在显式启用 `MINEBBS_ESA_SLIDER_ENABLED` 后对 GET/HEAD 挑战启动 Chromium，读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的边界。输入先用约 1.2 秒的三阶 Bezier 曲线接近滑块，再按下并执行从成功人工样本缩放出的 61 帧、约 465 ms 拖动轨迹；全程只发送 `mouseMoved` 和一次 `mousePressed`，不发送 `mouseReleased`。每个点通过 `nodriver` 的低层 CDP `Input.dispatchMouseEvent` 发送，并按绝对单调时钟调度。只有滑块 DOM 消失、页面离开验证标题且浏览器正常清理后才同步 Cookie 和 User-Agent，并只重试一次原 GET/HEAD。ESA 路径不会向模型发送截图或其他数据，挑战 POST 不会重放。轨迹单元测试只能验证输入契约；ESA 是否放行仍以实时挑战页面消失为准。
+WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只返回 `{"code":"...","confidence":...}`，随后随机生成 `PlayerNNNNNN` 用户名提交点赞表单。MineBBS ESA 只在显式启用 `MINEBBS_ESA_SLIDER_ENABLED` 后对 GET/HEAD 挑战启动 Chromium，读取 `#aliyunCaptcha-sliding-slider` 与轨道元素的边界。每次 Action 最多启动 3 个相互独立的浏览器/profile 尝试，任一次清除挑战就停止；三次全部失败才报告 `manual_intervention`。输入先用约 1.2 秒的三阶 Bezier 曲线接近滑块，再按下并执行从成功人工样本缩放出的 61 帧、约 465 ms 拖动轨迹；全程只发送 `mouseMoved` 和一次 `mousePressed`，不发送 `mouseReleased`。每个点通过 `nodriver` 的低层 CDP `Input.dispatchMouseEvent` 发送，并按绝对单调时钟调度。只有滑块 DOM 消失、页面离开验证标题且浏览器正常清理后才同步 Cookie 和 User-Agent，并只重试一次原 GET/HEAD。ESA 路径不会向模型发送截图或其他数据，挑战 POST 不会重放。轨迹单元测试只能验证输入契约；ESA 是否放行仍以实时挑战页面消失为准。
 
 ## 挑战处理边界
 

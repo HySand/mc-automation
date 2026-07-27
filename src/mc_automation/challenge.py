@@ -22,7 +22,7 @@ from .step_log import log_step
 
 
 class EsaSliderChallengeResolver:
-    """Clear one Alibaba ESA slide-to-end challenge using nodriver and DOM geometry."""
+    """Clear an Alibaba ESA slide-to-end challenge using nodriver and DOM geometry."""
 
     HANDLE_SELECTOR = "#aliyunCaptcha-sliding-slider"
     TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"
@@ -158,6 +158,7 @@ class EsaSliderChallengeResolver:
         465,
     )
     BROWSER_CLEANUP_TIMEOUT_SECONDS = 5.0
+    DEFAULT_MAX_ATTEMPTS = 3
 
     def __init__(
         self,
@@ -168,6 +169,7 @@ class EsaSliderChallengeResolver:
         headless: bool = False,
         browser_executable_path: str | Path | None = None,
         random_source: random.Random | None = None,
+        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     ) -> None:
         self.wait_seconds = max(0.0, wait_seconds)
         self.drag_steps = max(1, drag_steps)
@@ -177,6 +179,7 @@ class EsaSliderChallengeResolver:
             str(browser_executable_path) if browser_executable_path is not None else None
         )
         self._random = random_source or random.Random()
+        self.max_attempts = max(1, max_attempts)
 
     def resolve(
         self,
@@ -184,7 +187,7 @@ class EsaSliderChallengeResolver:
         session: requests.Session,
         timeout: tuple[float, float],
     ) -> bool:
-        """Run the one-shot async browser attempt from the synchronous transport boundary."""
+        """Run bounded independent browser attempts from the synchronous transport boundary."""
 
         log_step(
             "esa_resolution",
@@ -192,6 +195,7 @@ class EsaSliderChallengeResolver:
             status="started",
             url=url,
             headless=self.headless,
+            max_attempts=self.max_attempts,
         )
 
         try:
@@ -222,15 +226,59 @@ class EsaSliderChallengeResolver:
         log_step("esa_nodriver_import", site="minebbs", status="completed")
 
         try:
-            resolved = asyncio.run(self._resolve_async(nodriver, url, session, timeout))
+            for attempt in range(1, self.max_attempts + 1):
+                log_step(
+                    "esa_attempt",
+                    site="minebbs",
+                    status="started",
+                    url=url,
+                    attempt=attempt,
+                    max_attempts=self.max_attempts,
+                )
+                try:
+                    resolved = asyncio.run(self._resolve_async(nodriver, url, session, timeout))
+                except Exception as exc:
+                    log_step(
+                        "esa_attempt",
+                        site="minebbs",
+                        status="failed",
+                        url=url,
+                        attempt=attempt,
+                        max_attempts=self.max_attempts,
+                        resolved=False,
+                        exception_type=type(exc).__name__,
+                    )
+                    continue
+                log_step(
+                    "esa_attempt",
+                    site="minebbs",
+                    status="completed" if resolved else "failed",
+                    url=url,
+                    attempt=attempt,
+                    max_attempts=self.max_attempts,
+                    resolved=resolved,
+                )
+                if resolved:
+                    log_step(
+                        "esa_resolution",
+                        site="minebbs",
+                        status="completed",
+                        url=url,
+                        resolved=True,
+                        attempts=attempt,
+                        max_attempts=self.max_attempts,
+                    )
+                    return True
             log_step(
                 "esa_resolution",
                 site="minebbs",
-                status="completed" if resolved else "failed",
+                status="failed",
                 url=url,
-                resolved=resolved,
+                resolved=False,
+                attempts=self.max_attempts,
+                max_attempts=self.max_attempts,
             )
-            return resolved
+            return False
         except Exception as exc:
             # Browser availability and protocol errors are deliberately fail-closed. The
             # transport will classify the unresolved challenge as manual intervention.

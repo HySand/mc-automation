@@ -64,7 +64,6 @@ Methods return typed `ActionResult` values instead of raising for expected site 
 
 - last successful paid bump per site/thread
 - MineBBS daily gold-card purchase date
-- consecutive challenge count and `suspended_until`
 - last run/result summary
 
 Writes are atomic. Missing/corrupt state starts in conservative recovery mode: read-only checks and sign-in may run, but purchase/use waits until site evidence reconstructs eligibility.
@@ -76,7 +75,6 @@ GitHub schedule/manual trigger
   -> restore non-secret state cache
   -> validate Secrets/Variables
   -> for each enabled site (isolated)
-      -> suspension check
       -> authenticate
       -> challenge detection
       -> daily sign-in
@@ -169,7 +167,8 @@ GitHub schedule/manual trigger
 - `actions/cache/restore` and `actions/cache/save` use unique run keys plus a stable restore prefix for `state.json`.
 - State save runs with `if: always()`; the automation exit code is captured so state and summary are preserved before the job is failed.
 - ESA browser support is opt-in through `MINEBBS_ESA_SLIDER_ENABLED`; the workflow installs the
-  `nodriver` browser extra only when enabled and uses a visible Chromium session for one bounded GET/HEAD retry.
+  `nodriver` browser extra only when enabled. Each resolution uses at most three independent visible
+  Chromium profiles, stops at the first successful clearance, and then performs one bounded GET/HEAD retry.
 
 ## Compatibility and Rollback
 

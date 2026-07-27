@@ -14,7 +14,7 @@
 
 - CLI: application start/end, configuration result, enabled site names, state load/save, adapter
   setup, summary write, result count, and exit code.
-- Orchestrator: per-site start/end, suspension, authentication, sign-in, promotion, rank,
+- Orchestrator: per-site start/end, authentication, sign-in, promotion, rank,
   ownership, recovery/cooldown, inventory count, purchase/apply start, action result, and exception
   type.
 - HTTP: method, sanitized URL, response status, content type/length, duration, redirect count and

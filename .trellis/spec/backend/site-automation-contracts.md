@@ -26,8 +26,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Empty optional boolean values inherit their documented default; specifically, an empty
   `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED` inherits `AI_SOLVER_ENABLED` instead of disabling the captcha
   solver.
-- MineBBS ESA option: `MINEBBS_ESA_SLIDER_ENABLED` (default `false`) enables one `nodriver`
-  slide-to-end attempt from DOM geometry. It requires `MINEBBS_ENABLED=true` and does not require or
+- MineBBS ESA option: `MINEBBS_ESA_SLIDER_ENABLED` (default `false`) enables up to three independent
+  `nodriver` slide-to-end attempts from DOM geometry. It requires `MINEBBS_ENABLED=true` and does not require or
   consume AI endpoint, key, model, prompt, or screenshot data.
 - Optional `MINEBBS_BROWSER_EXECUTABLE_PATH` points to an existing Chromium-family browser executable when
   `nodriver` cannot auto-discover one. An empty value leaves discovery to `nodriver`.
@@ -94,7 +94,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   disappeared. Other task ID 1 links, such as `do=apply`, do not mean the completed task remains.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
-- If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium once.
+- If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium, with
+  at most three independent browser/profile attempts per Action run.
   The resolver reads the Alibaba ESA handle/track bounding boxes, moves the handle to the track end
   with a seeded-testable path shaped from a successful manual sample, synchronizes cookies and User-Agent
   only after challenge markers disappear, and retries the original GET/HEAD once. POST challenges
@@ -125,7 +126,7 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Apply the existing retry policy to the preserved adapter: two retries for GET/HEAD connection,
   read, and selected 5xx failures; never automatically replay POST.
 - Run every response through `CloudflareWafGuard`; `cloudscraper` success does not bypass the
-  application's challenge classification or one-shot AI browser policy.
+  application's challenge classification or bounded browser-resolution policy.
 
 ### 4. Validation & Error Matrix
 
@@ -251,7 +252,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 ### 2. Signatures
 
 - `EsaSliderChallengeResolver(wait_seconds=15.0, drag_steps=120, drag_duration_ms=465, headless=False, browser_executable_path=None, random_source=None)`
-- `EsaSliderChallengeResolver.resolve(url, session, timeout) -> bool`
+- `EsaSliderChallengeResolver(max_attempts=3).resolve(url, session, timeout) -> bool`
 - `EsaSliderChallengeResolver.HANDLE_SELECTOR = "#aliyunCaptcha-sliding-slider"`
 - `EsaSliderChallengeResolver.TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"`
 
@@ -262,6 +263,9 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   startup, launches visible Chromium with that explicit profile, copies request cookies into the
   browser, and navigates only to the challenged URL. The profile is removed after successful use,
   failed startup, navigation failure, or protocol failure.
+- Each resolution call performs at most three independent attempts. Every failed attempt fully
+  cleans its browser and temporary profile before the next attempt starts. The first cleared
+  challenge stops the loop; only three failures produce the final unresolved result.
 - Press starts at a random safe point inside the handle: 22-78% horizontally and 28-72%
   vertically. The clamp pointer coordinate preserves that sampled grab offset instead of assuming
   the handle center. Before pressing, a 232-point cubic Bezier approach crosses the viewport over
@@ -379,10 +383,15 @@ for step, point in enumerate(points, 1):
 
 ## State and side effects
 
-State is versioned, atomic JSON containing only operational timestamps, challenge count, and suspension
-deadline. Credentials, cookies, CSRF tokens, response bodies, API keys, and extension paths are never
+State is versioned, atomic JSON containing only operational timestamps needed for cooldown and daily
+purchase rules. Challenge counts and suspension deadlines are not persisted. Credentials, cookies,
+CSRF tokens, response bodies, API keys, and extension paths are never
 written to state, summaries, or ordinary logs. Unknown rank, owner, balance, inventory, form, CSRF
 token, or target option raises `SiteParseError` before a side effect.
+
+KLPBBS ownership compares the authenticated Discuz UID discovered after login with the first post
+author UID encoded in `space-uid-<UID>.html` or `home.php?mod=space&uid=<UID>`. The configured login
+identifier may be an email address and must never be compared directly with the public display name.
 
 All execution paths emit JSONL step logs through the closed metadata allowlist in `step_log.py`.
 HTTP URLs retain only scheme, host, port, and path. WDSJFWQ logs image size, model attempt status,
@@ -403,10 +412,10 @@ complete allowlisted JSONL diagnostic stream.
 | Enabled site lacks a required key | Redacted `manual_intervention`; perform no network calls |
 | Both sites disabled | `skipped`, exit zero |
 | Challenge in default mode | Raise `SecurityChallenge`; do not retry |
-| GET/HEAD MineBBS ESA challenge with DOM slider enabled | One DOM-derived drag attempt, synchronize session only after clear, retry once |
+| GET/HEAD MineBBS ESA challenge with DOM slider enabled | Up to three independent DOM-derived drag attempts, synchronize session after first clear, retry original request once |
 | WDSJFWQ captcha form with AI solver enabled | Download captcha image, require strict JSON code, submit one filled form |
 | Challenged POST or interactive challenge not cleared | Raise `SecurityChallenge`; never replay |
-| Three consecutive challenges | Persist a 24-hour suspension |
+| Repeated challenges across runs | Report each run independently; never persist a suspension marker |
 | Unknown/ambiguous markup or ownership mismatch | Raise `SiteParseError`; no purchase/use submission |
 | Transient timeout or selected GET 5xx | Bounded transport retry; POST is not automatically retried |
 | KLPBBS rank at or below threshold | `skipped`; do not query inventory or spend |
@@ -414,10 +423,10 @@ complete allowlisted JSONL diagnostic stream.
 
 ## Required tests
 
-Tests must cover configuration redaction, disabled-site behavior, challenge detection, one-shot
+Tests must cover configuration redaction, disabled-site behavior, challenge detection, three-attempt
 ESA DOM browser retry, WDSJFWQ captcha form filling, strict model JSON parsing, Cookie/User-Agent
-synchronization, challenged POST no-replay, challenge accumulation, cooldown/interval boundaries,
-ownership and parser ambiguity, state redaction, cross-site failure isolation, WARP fail-closed
+synchronization, challenged POST no-replay, repeated-run challenge handling, cooldown/interval boundaries,
+ownership by authenticated Discuz UID, parser ambiguity, state redaction, cross-site failure isolation, WARP fail-closed
 workflow wiring, and promotion-click proxy isolation. The quality gate is:
 
 ```text

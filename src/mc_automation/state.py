@@ -14,22 +14,12 @@ STATE_VERSION = 1
 class SiteState:
     last_paid_bump: str | None = None
     gold_purchase_date: str | None = None
-    challenge_count: int = 0
-    suspended_until: str | None = None
 
     def paid_bump_at(self) -> datetime | None:
         if not self.last_paid_bump:
             return None
         try:
             return datetime.fromisoformat(self.last_paid_bump)
-        except ValueError:
-            return None
-
-    def suspension_at(self) -> datetime | None:
-        if not self.suspended_until:
-            return None
-        try:
-            return datetime.fromisoformat(self.suspended_until)
         except ValueError:
             return None
 

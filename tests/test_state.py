@@ -45,3 +45,29 @@ def test_legacy_reply_state_is_ignored_and_removed_on_save(tmp_path: Path) -> No
     state = StateStore(path).load()
     StateStore(path).save(state)
     assert "last_reply_date" not in path.read_text(encoding="utf-8")
+
+
+def test_legacy_challenge_suspension_is_ignored_and_removed_on_save(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "recovered": True,
+                "sites": {
+                    "minebbs": {
+                        "challenge_count": 3,
+                        "suspended_until": "2026-07-28T12:00:00+00:00",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    state = StateStore(path).load()
+    StateStore(path).save(state)
+
+    saved = path.read_text(encoding="utf-8")
+    assert "challenge_count" not in saved
+    assert "suspended_until" not in saved

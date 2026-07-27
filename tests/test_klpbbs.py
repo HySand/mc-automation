@@ -78,7 +78,10 @@ def test_authenticate_submits_current_formhash_and_verifies_session() -> None:
             "https://example.test/member.php?mod=logging&action=login": (
                 '<input name="formhash" value="abc123">'
             ),
-            "https://example.test": '<a href="member.php?mod=logging&action=logout">退出登录</a>',
+            "https://example.test": (
+                '<script>var discuz_uid = "1";</script>'
+                '<a href="member.php?mod=logging&action=logout">退出登录</a>'
+            ),
         }
     )
     adapter = KLPBBSAdapter(config(), transport, base_url="https://example.test")
@@ -89,6 +92,7 @@ def test_authenticate_submits_current_formhash_and_verifies_session() -> None:
     post = next(call for call in transport.calls if call[0] == "POST")
     assert post[2]["data"]["formhash"] == "abc123"
     assert post[2]["data"]["username"] == "owner"
+    assert adapter.authenticated_uid == "1"
 
 
 def test_rank_uses_normal_thread_order_and_rejects_unknown_markup() -> None:
@@ -194,16 +198,19 @@ def test_inventory_distinguishes_explicitly_empty_from_unparseable() -> None:
         changed.get_inventory()
 
 
-def test_target_owner_must_match_authenticated_username() -> None:
+def test_target_owner_must_match_authenticated_uid_when_login_uses_email() -> None:
     thread_url = "https://example.test/thread-42-1-1.html"
+    account_url = "https://example.test"
+    email_config = replace(config(), username="owner@example.test")
     owned = KLPBBSAdapter(
-        config(),
+        email_config,
         FakeTransport(
             {
+                account_url: '<script>var discuz_uid = "1589417";</script>',
                 thread_url: (
                     '<table id="pid1"><div class="authi">'
-                    '<a href="space-uid-1.html">owner</a></div></table>'
-                )
+                    '<a href="space-uid-1589417.html">Atmosss</a></div></table>'
+                ),
             }
         ),
         base_url="https://example.test",
@@ -211,19 +218,43 @@ def test_target_owner_must_match_authenticated_username() -> None:
     owned.verify_target_ownership()
 
     foreign = KLPBBSAdapter(
-        config(),
+        email_config,
         FakeTransport(
             {
+                account_url: '<script>var discuz_uid = "1589417";</script>',
                 thread_url: (
                     '<table id="pid1"><div class="authi">'
-                    '<a href="space-uid-2.html">someone-else</a></div></table>'
-                )
+                    '<a href="space-uid-2.html">Atmosss</a></div></table>'
+                ),
             }
         ),
         base_url="https://example.test",
     )
-    with pytest.raises(SiteParseError, match="不属于配置账号"):
+    with pytest.raises(SiteParseError, match="不属于当前登录账号"):
         foreign.verify_target_ownership()
+
+
+def test_target_owner_accepts_query_style_discuz_uid_links() -> None:
+    thread_url = "https://example.test/thread-42-1-1.html"
+    adapter = KLPBBSAdapter(
+        replace(config(), username="owner@example.test"),
+        FakeTransport(
+            {
+                "https://example.test": (
+                    '<div class="user"><a href="home.php?mod=space&amp;uid=1589417">'
+                    "Atmosss</a>"
+                    '<a href="member.php?mod=logging&amp;action=logout">退出登录</a></div>'
+                ),
+                thread_url: (
+                    '<table id="pid10355041"><div class="authi">'
+                    '<a href="home.php?mod=space&amp;uid=1589417">Atmosss</a></div></table>'
+                ),
+            }
+        ),
+        base_url="https://example.test",
+    )
+
+    adapter.verify_target_ownership()
 
 
 def test_purchase_reports_insufficient_resources_without_retrying() -> None:

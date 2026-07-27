@@ -254,6 +254,7 @@ def configured_resolver(
         drag_steps=4,
         drag_duration_ms=40,
         random_source=random.Random(7),
+        max_attempts=kwargs.pop("max_attempts", 1),
         **kwargs,
     )
     monkeypatch.setattr(resolver, "_monotonic", clock.now)
@@ -288,11 +289,49 @@ def test_resolver_refuses_to_nest_an_existing_event_loop() -> None:
     assert not asyncio.run(invoke())
 
 
+def test_resolver_retries_three_independent_attempts_before_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolver = EsaSliderChallengeResolver(max_attempts=3)
+    attempts = 0
+
+    async def unresolved(*_args: Any) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return False
+
+    monkeypatch.setattr(challenge.importlib, "import_module", lambda _name: object())
+    monkeypatch.setattr(resolver, "_resolve_async", unresolved)
+
+    assert not resolver.resolve("https://example.test/", requests.Session(), (1, 1))
+    assert attempts == 3
+
+
+def test_resolver_stops_retrying_after_second_attempt_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolver = EsaSliderChallengeResolver(max_attempts=3)
+    outcomes = iter((False, True, False))
+    attempts = 0
+
+    async def resolve_on_second(*_args: Any) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return next(outcomes)
+
+    monkeypatch.setattr(challenge.importlib, "import_module", lambda _name: object())
+    monkeypatch.setattr(resolver, "_resolve_async", resolve_on_second)
+
+    assert resolver.resolve("https://example.test/", requests.Session(), (1, 1))
+    assert attempts == 2
+
+
 def test_esa_slider_defaults_generate_a_dense_cubic_bezier_path() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(7))
 
     assert resolver.drag_steps == 61
     assert resolver.drag_duration_ms == 465
+    assert resolver.max_attempts == 3
 
     samples = resolver._bezier_drag_path(30.0, 40.0, 350.0)
     x_steps = [samples[0][0] - 30.0] + [
@@ -503,7 +542,7 @@ def test_nodriver_resolver_fails_closed_without_slider_geometry(
 ) -> None:
     nodriver = install_fake_nodriver(monkeypatch, None)
 
-    assert not EsaSliderChallengeResolver(wait_seconds=1).resolve(
+    assert not EsaSliderChallengeResolver(wait_seconds=1, max_attempts=1).resolve(
         "https://example.test/", requests.Session(), (1, 1)
     )
     assert nodriver.browser.tab.events == []
@@ -519,7 +558,7 @@ def test_nodriver_resolver_rejects_invalid_track_dimensions(
         track_position=FakePosition(x=10, y=20, width=40, height=40),
     )
 
-    assert not EsaSliderChallengeResolver(wait_seconds=1).resolve(
+    assert not EsaSliderChallengeResolver(wait_seconds=1, max_attempts=1).resolve(
         "https://example.test/", requests.Session(), (1, 1)
     )
     assert nodriver.browser.tab.events == []
@@ -576,7 +615,9 @@ def test_nodriver_start_and_navigation_failures_are_unresolved(
     )
     resolver = EsaSliderChallengeResolver()
     monkeypatch.setattr(resolver, "_fallback_browser_executable", lambda: None)
+    start_failure.start_errors = [FileNotFoundError("missing browser")] * 3
     assert not resolver.resolve("https://example.test/", requests.Session(), (1, 1))
+    assert len(start_failure.start_calls) == 3
     assert start_failure.util.calls == []
 
     navigation_failure = install_fake_nodriver(

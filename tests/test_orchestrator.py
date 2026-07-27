@@ -182,24 +182,22 @@ def test_minebbs_gold_purchase_is_recorded_and_excluded_for_same_day() -> None:
     assert adapter.excluded_purchase_items == frozenset({"gold"})
 
 
-def test_three_challenges_suspend_site() -> None:
+def test_repeated_challenges_are_retried_without_persistent_suspension() -> None:
     adapter = FakeAdapter(challenge=True)
     state = AppState(recovered=True)
     for hour in range(3):
         Orchestrator([adapter], state, now=NOW.replace(hour=12 + hour)).run()
-    site_state = state.for_site("fake")
-    assert site_state.challenge_count == 3
-    assert site_state.suspended_until is not None
+    assert adapter.calls == ["authenticate"] * 3
+    assert not hasattr(state.for_site("fake"), "challenge_count")
+    assert not hasattr(state.for_site("fake"), "suspended_until")
 
 
-def test_challenges_after_successful_authentication_also_accumulate() -> None:
+def test_repeated_post_authentication_challenges_are_not_skipped() -> None:
     adapter = FakeAdapter(challenge_after_auth=True)
     state = AppState(recovered=True)
     for hour in range(3):
         Orchestrator([adapter], state, now=NOW.replace(hour=12 + hour)).run()
-    site_state = state.for_site("fake")
-    assert site_state.challenge_count == 3
-    assert site_state.suspended_until is not None
+    assert adapter.calls == ["authenticate", "daily_sign_in"] * 3
 
 
 def test_failure_is_isolated_between_sites() -> None:

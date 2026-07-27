@@ -18,7 +18,7 @@ Rollback point: foundation files only; no site operations exist yet.
 ## 2. Core orchestration and state
 
 - [x] Implement versioned atomic JSON state with corrupt/missing-state recovery.
-- [x] Implement Shanghai-date helpers, rank threshold, paid cooldown, single-transaction guard, challenge suspension, and per-site isolation.
+- [x] Implement Shanghai-date helpers, rank threshold, paid cooldown, single-transaction guard, per-run challenge handling, and per-site isolation.
 - [x] Implement normal HTTP transport with bounded retry and challenge-page detection.
 - [x] Implement Markdown/JSON run summaries and deterministic exit codes.
 
@@ -98,7 +98,7 @@ Final rollback: disable both site variables to leave the workflow installed but 
 
 - [x] Add explicit browser-challenge configuration and bounded promotion visit settings.
 - [x] Validate configured initial URLs and redirects before requests.
-- [x] Add a single-attempt `nodriver` challenge resolver with low-level CDP mouse events and cookie/session synchronization.
+- [x] Add a three-attempt `nodriver` challenge resolver with independent browser profiles, low-level CDP mouse events, and cookie/session synchronization.
 - [x] Preserve the existing fail-closed `SecurityChallenge` behavior when the extension is disabled or cannot clear a challenge.
 
 Validation:
@@ -156,7 +156,7 @@ python -m pytest --cov=mc_automation --cov-report=term-missing
 ## 12. Authorized one-shot like adapters
 
 - [ ] Add independently configured wiring for WDSJFWQ and MCLISTS target pages.
-- [ ] Add a one-shot adapter contract and orchestrator branch that preserves site isolation and challenge suspension without entering bump/card flows.
+- [ ] Add a one-shot adapter contract and orchestrator branch that preserves site isolation and per-run challenge handling without entering bump/card flows.
 - [ ] Parse explicit already-liked markers and exactly one like link/form; fail closed on ambiguous markup.
 - [ ] Add tests for independently configured target pages, link/form submissions, already-liked skips, ambiguous markup, and per-site failure isolation.
 

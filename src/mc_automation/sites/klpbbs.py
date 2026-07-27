@@ -45,6 +45,7 @@ class KLPBBSAdapter:
         self.transport = transport
         self.base_url = base_url.rstrip("/")
         self.promotion_visitor = promotion_visitor
+        self.authenticated_uid: str | None = None
 
     def _result(self, action: str, status: ActionStatus, message: str) -> ActionResult:
         return ActionResult(self.name, action, status, message)
@@ -408,6 +409,28 @@ class KLPBBSAdapter:
             or "退出登录" in html
         )
 
+    @staticmethod
+    def _uid_from_href(href: str) -> str | None:
+        match = re.search(r"space-uid-([1-9]\d*)", href)
+        if match is not None:
+            return match.group(1)
+        values = parse_qs(urlsplit(href).query).get("uid")
+        return values[0] if values and values[0].isdigit() and values[0] != "0" else None
+
+    @classmethod
+    def _authenticated_uid(cls, html: str) -> str | None:
+        match = re.search(r"discuz_uid\s*=\s*['\"]?([1-9]\d*)", html)
+        if match is not None:
+            return match.group(1)
+        soup = BeautifulSoup(html, "html.parser")
+        logout = soup.select_one('a[href*="action=logout"]')
+        scope = logout.parent if logout is not None and logout.parent is not None else soup
+        for anchor in scope.select('a[href*="space-uid-"], a[href*="mod=space"][href*="uid="]'):
+            uid = cls._uid_from_href(str(anchor.get("href", "")))
+            if uid is not None:
+                return uid
+        return None
+
     def authenticate(self) -> ActionResult:
         login_page = self.transport.get(self._url("member.php?mod=logging&action=login"))
         formhash = self._formhash(login_page.text)
@@ -427,6 +450,7 @@ class KLPBBSAdapter:
         )
         home = self.transport.get(self.base_url)
         if self._is_authenticated(home.text):
+            self.authenticated_uid = self._authenticated_uid(home.text)
             return self._result("authenticate", ActionStatus.SUCCESS, "登录成功")
         return self._result(
             "authenticate", ActionStatus.MANUAL_INTERVENTION, "登录失败或需要人工验证"
@@ -514,11 +538,21 @@ class KLPBBSAdapter:
 
     def verify_target_ownership(self) -> None:
         first_post = self._target_posts()[0]
-        author = first_post.select_one(".authi a[href*='space-']")
+        author = first_post.select_one(
+            '.authi a[href*="space-uid-"], .authi a[href*="mod=space"][href*="uid="]'
+        )
         if author is None:
             raise SiteParseError("KLPBBS 无法识别目标帖作者")
-        if author.get_text(strip=True) != self.config.username:
-            raise SiteParseError("KLPBBS 目标帖不属于配置账号，拒绝操作")
+        author_uid = self._uid_from_href(str(author.get("href", "")))
+        if author_uid is None:
+            raise SiteParseError("KLPBBS 无法识别目标帖作者 UID")
+        if self.authenticated_uid is None:
+            home = self.transport.get(self.base_url)
+            self.authenticated_uid = self._authenticated_uid(home.text)
+        if self.authenticated_uid is None:
+            raise SiteParseError("KLPBBS 无法识别当前登录账号 UID")
+        if author_uid != self.authenticated_uid:
+            raise SiteParseError("KLPBBS 目标帖不属于当前登录账号，拒绝操作")
 
     def get_inventory(self) -> Inventory:
         page = self.transport.get(self._url("home.php?mod=magic&action=mybox"))
