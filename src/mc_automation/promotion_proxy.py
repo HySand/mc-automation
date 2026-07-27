@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import random
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -16,7 +17,6 @@ from requests.exceptions import ProxyError, SSLError, Timeout
 from .step_log import log_step
 from .transport import TransportError
 
-DEFAULT_PROXY_LIMIT = 2_000
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 DEFAULT_PROXY_WORKERS = 20
 MAX_PROMOTION_REDIRECTS = 3
@@ -204,10 +204,11 @@ class DynamicProxyPool:
         *,
         sources: Sequence[ProxySource] | None = None,
         session: requests.Session | None = None,
-        candidate_limit: int = DEFAULT_PROXY_LIMIT,
+        candidate_limit: int | None = None,
         source_timeout: tuple[float, float] = (5.0, 15.0),
         source_max_bytes: int = DEFAULT_SOURCE_MAX_BYTES,
         per_source_limit: int | None = None,
+        random_source: random.Random | None = None,
     ) -> None:
         self.sources = tuple(default_proxy_sources() if sources is None else sources)
         self.session = session or requests.Session()
@@ -217,6 +218,7 @@ class DynamicProxyPool:
         self.source_timeout = source_timeout
         self.source_max_bytes = source_max_bytes
         self.per_source_limit = per_source_limit
+        self.random_source = random_source or random.SystemRandom()
         self._loaded: tuple[str, ...] | None = None
 
     def load(self) -> tuple[str, ...]:
@@ -244,7 +246,9 @@ class DynamicProxyPool:
                         before = len(unique)
                         unique.setdefault(proxy, None)
                         source_added += len(unique) - before
-                    if len(unique) >= self.candidate_limit or (
+                    if (
+                        self.candidate_limit is not None and len(unique) >= self.candidate_limit
+                    ) or (
                         self.per_source_limit is not None and source_added >= self.per_source_limit
                     ):
                         break
@@ -270,12 +274,14 @@ class DynamicProxyPool:
                 source_name=source.name,
                 proxy_count=source_added,
             )
-            if len(unique) >= self.candidate_limit:
+            if self.candidate_limit is not None and len(unique) >= self.candidate_limit:
                 break
 
         if not unique:
             raise ProxyPoolExhausted("所有动态代理源均不可用或未返回有效公共 HTTP 代理")
-        self._loaded = tuple(unique)
+        candidates = list(unique)
+        self.random_source.shuffle(candidates)
+        self._loaded = tuple(candidates)
         return self._loaded
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -110,9 +111,10 @@ def test_dynamic_pool_isolates_source_failures_and_deduplicates_candidates() -> 
             ProxySource("geonode", geonode_url, "geonode"),
         ),
         session=session,
+        random_source=random.Random(0),
     )
 
-    assert pool.load() == ("http://8.8.8.8:8080", "http://1.1.1.1:80")
+    assert set(pool.load()) == {"http://8.8.8.8:8080", "http://1.1.1.1:80"}
     assert not session.trust_env
 
 
@@ -130,13 +132,14 @@ def test_dynamic_pool_caps_each_source_to_preserve_source_diversity() -> None:
         session=session,
         candidate_limit=3,
         per_source_limit=2,
+        random_source=random.Random(0),
     )
 
-    assert pool.load() == (
+    assert set(pool.load()) == {
         "http://8.8.8.8:80",
         "http://1.1.1.1:80",
         "http://208.67.222.222:80",
-    )
+    }
 
 
 def test_dynamic_pool_has_no_default_per_source_quota() -> None:
@@ -148,9 +151,23 @@ def test_dynamic_pool_has_no_default_per_source_quota() -> None:
         sources=(ProxySource("all", source_url),),
         session=session,
         candidate_limit=4,
+        random_source=random.Random(0),
     )
 
     assert len(pool.load()) == 4
+
+
+def test_dynamic_pool_has_no_default_global_candidate_limit() -> None:
+    source_url = "https://source.invalid/many"
+    proxies = "\n".join(f"8.8.{index // 250}.{index % 250 + 1}:80" for index in range(600))
+    session = SourceSession({source_url: StubResponse(proxies.encode())})
+    pool = DynamicProxyPool(
+        sources=(ProxySource("many", source_url),),
+        session=session,
+        random_source=random.Random(0),
+    )
+
+    assert len(pool.load()) == 600
 
 
 def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> None:
