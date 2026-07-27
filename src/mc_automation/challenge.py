@@ -428,7 +428,6 @@ class EsaSliderChallengeResolver:
                 headless=self.headless,
                 humanize=True,
                 human_preset="careful",
-                browser_version="146.0.7680.177.5",
             )
             log_step("esa_browser_start", site="minebbs", status="completed")
             cookies = self._request_cookies_for_playwright(session, url)
@@ -587,7 +586,8 @@ class EsaSliderChallengeResolver:
 
     @staticmethod
     async def _read_playwright_session(context: Any, page: Any) -> tuple[list[Any], str]:
-        return await context.cookies(), await page.evaluate("navigator.userAgent")
+        browser_cookies = await context.cookies()
+        return browser_cookies, await page.evaluate("navigator.userAgent")
 
     @staticmethod
     def _request_cookies_for_playwright(
@@ -1016,7 +1016,16 @@ class EsaSliderChallengeResolver:
         cookies: Sequence[Any], user_agent: str, session: requests.Session
     ) -> None:
         for cookie in cookies:
-            session.cookies.set_cookie(cookie)
+            if isinstance(cookie, dict):
+                session.cookies.set(
+                    str(cookie["name"]),
+                    str(cookie["value"]),
+                    domain=str(cookie.get("domain", "")),
+                    path=str(cookie.get("path", "/")),
+                    secure=bool(cookie.get("secure", False)),
+                )
+            else:
+                session.cookies.set_cookie(cookie)
         if user_agent:
             session.headers["User-Agent"] = user_agent
 
