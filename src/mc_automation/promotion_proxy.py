@@ -256,7 +256,7 @@ class ProxyPromotionVisitor:
         pool: ProxyPool,
         *,
         session_factory: Callable[[], requests.Session] = requests.Session,
-        timeout: tuple[float, float] = (5.0, 10.0),
+        timeout: tuple[float, float] = (2.0, 5.0),
     ) -> None:
         self.pool = pool
         self.session_factory = session_factory

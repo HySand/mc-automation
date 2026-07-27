@@ -179,6 +179,9 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
         for call in session.calls
     )
     assert all(call[1]["verify"] is True for session in created_sessions for call in session.calls)
+    assert all(
+        call[1]["timeout"] == (2.0, 5.0) for session in created_sessions for call in session.calls
+    )
 
 
 def test_proxy_visitor_rejects_redirects_without_following_them() -> None:

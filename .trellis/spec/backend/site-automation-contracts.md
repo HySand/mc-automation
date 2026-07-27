@@ -54,6 +54,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - A promotion click uses a fresh session with `trust_env=False`, cleared headers/cookies, explicit
   `http`/`https` proxy arguments, TLS verification enabled, and redirects disabled. The adapter must
   validate that the exact promotion URL is same-origin before passing it to the visitor.
+- Free proxy probes use a short `2s` connect and `5s` read timeout. A timeout is an expected failed
+  candidate: it consumes that proxy and immediately advances to the next one.
 - KLPBBS promotion uses stable task ID `1`, and the doing-task list is
   `home.php?mod=task&item=doing` (not `do=doing`). The configured same-origin promotion URL supplies
   the click target because the task center does not necessarily render a per-account promotion URL.
