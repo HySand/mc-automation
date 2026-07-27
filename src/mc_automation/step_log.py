@@ -43,6 +43,8 @@ PHASE_LABELS = {
     "challenge_resolution": "验证处理",
     "esa_attempt": "ESA 滑块尝试",
     "esa_browser_transport": "ESA 浏览器传输",
+    "esa_navigation_response": "Chromium 导航响应",
+    "esa_fetch_response": "Chromium 同源请求",
     "site_action": "站点操作",
     "page_fetch": "读取页面",
     "like_count": "点赞数",
@@ -95,6 +97,16 @@ ACTION_LABELS = {
     "apply_bump_item": "使用顶帖道具",
 }
 
+PAGE_CLASS_LABELS = {
+    "normal": "正常页面",
+    "esa": "ESA 滑块",
+    "cloudflare_waiting": "Cloudflare 等待页",
+    "cloudflare_block": "Cloudflare 拦截页",
+    "http_block": "HTTP 拒绝页",
+    "http_error": "HTTP 错误页",
+    "unknown": "未知页面",
+}
+
 QUIET_HUMAN_PHASES = frozenset(
     {
         "http_request",
@@ -134,6 +146,8 @@ ALLOWED_METADATA_KEYS = frozenset(
         "field_count",
         "field_names",
         "frame_count",
+        "frame_classes",
+        "frame_urls",
         "final_origin_matches",
         "format_valid",
         "form_count",
@@ -155,6 +169,7 @@ ALLOWED_METADATA_KEYS = frozenset(
         "normal_thread_count",
         "owned",
         "path_points",
+        "page_class",
         "progress_changed",
         "progress_percent",
         "promotion_parameter_preserved",
@@ -217,6 +232,12 @@ def _scalar(value: object) -> SafeScalar:
 def _safe_value(key: str, value: object) -> SafeValue:
     if key in {"url", "redirect_target"}:
         return safe_url(str(value))
+    if (
+        key == "frame_urls"
+        and isinstance(value, Sequence)
+        and not isinstance(value, (str, bytes, bytearray))
+    ):
+        return [safe_url(str(item)) for item in value]
     if isinstance(value, Mapping):
         return {str(name): _scalar(item) for name, item in value.items()}
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -239,7 +260,10 @@ def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
         ("exception_type", "错误", ""),
         ("exit_code", "退出码", ""),
         ("challenge_kind", "验证类型", ""),
+        ("page_class", "页面类型", ""),
         ("frame_count", "Frame", ""),
+        ("frame_classes", "Frame 类型", ""),
+        ("frame_urls", "Frame 地址", ""),
         ("container_count", "验证码容器", ""),
         ("descendant_count", "容器子节点", ""),
         ("marker_names", "DOM 标识", ""),
@@ -254,6 +278,10 @@ def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
                 value = RESULT_STATUS_LABELS.get(str(value), value)
             elif key == "action":
                 value = ACTION_LABELS.get(str(value), value)
+            elif key == "page_class":
+                value = PAGE_CLASS_LABELS.get(str(value), value)
+            elif key == "frame_classes" and isinstance(value, list):
+                value = [PAGE_CLASS_LABELS.get(str(item), item) for item in value]
             parts.append(f"{label} {value}{suffix}")
     return " | ".join(parts)
 

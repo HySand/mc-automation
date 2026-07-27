@@ -29,6 +29,7 @@
 |---|---|
 | `KLPBBS_USERNAME` / `KLPBBS_PASSWORD` | KLPBBS 登录凭据 |
 | `KLPBBS_THREAD_ID` | KLPBBS 宣传帖 ID |
+| `KLPBBS_PROMOTION_URL` | KLPBBS 账号的同源推广链接，例如 `https://klpbbs.com/?fromuid=123456`；启用推广时必填 |
 | `MINEBBS_USERNAME` / `MINEBBS_PASSWORD` | MineBBS 登录凭据；用户名必须与目标帖作者一致 |
 | `MINEBBS_THREAD_ID` | MineBBS 宣传帖数字 ID、`slug.ID` 短名或完整帖子 URL；运行时统一提取数字 ID |
 | `AI_SOLVER_ENDPOINT` | OpenAI-compatible endpoint，建议填 base URL 如 `https://api.example.com/v1` |
@@ -42,7 +43,6 @@
 | `MINEBBS_ENABLED` | `false` | 启用 MineBBS 适配器 |
 | `RANK_THRESHOLD` | `8` | KLPBBS 排名门槛；排名大于该值时尝试顶贴 |
 | `KLPBBS_PROMOTION_ENABLED` | `false` | 启用 KLPBBS 官方推广任务 |
-| `KLPBBS_PROMOTION_URL` | 空 | KLPBBS 账号的同源推广链接，例如 `https://klpbbs.com/?fromuid=123456`；启用推广时必填 |
 | `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS` | `0.5` | 有效代理批次后的间隔；全失败批次立即跳过，最低 `0.5` 秒 |
 | `PAID_BUMP_COOLDOWN_SECONDS` | `3600` | KLPBBS 付费顶贴冷却 |
 | `MINEBBS_BUMP_INTERVAL_HOURS` | `16` | MineBBS 顶贴间隔 |
@@ -54,7 +54,7 @@
 | `AI_SOLVER_MAX_ATTEMPTS` | `1` | 模型请求最大尝试次数，最高 5 |
 | `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED` | 空 | 单独控制 WDSJFWQ 图片验证码；空值继承 `AI_SOLVER_ENABLED` |
 
-账号、密码、Cookie、CSRF token、`AI_SOLVER_ENDPOINT` 和 `AI_SOLVER_API_KEY` 不得写入 Variables、工作流文件、状态缓存或日志。Actions workflow 从 Secrets 注入 endpoint 和 key，日志会把它们加入脱敏列表。
+账号、密码、Cookie、CSRF token、`KLPBBS_PROMOTION_URL`、`AI_SOLVER_ENDPOINT` 和 `AI_SOLVER_API_KEY` 不得写入 Variables、工作流文件、状态缓存或日志。Actions workflow 从 Secrets 注入这些值，日志会把它们加入脱敏列表。
 
 ## 本地运行
 

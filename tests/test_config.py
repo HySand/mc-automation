@@ -257,7 +257,8 @@ def test_workflow_enforces_warp_and_keeps_promotion_proxy_configuration_separate
     assert "^warp=(on|plus)$" in workflow
     assert "KLPBBS_PROMOTION_PROXY_TARGET_URL" not in workflow
     assert "KLPBBS_PROMOTION_TARGET_MARKER" not in workflow
-    assert "KLPBBS_PROMOTION_URL" in workflow
+    assert "KLPBBS_PROMOTION_URL: ${{ secrets.KLPBBS_PROMOTION_URL }}" in workflow
+    assert "KLPBBS_PROMOTION_URL: ${{ vars.KLPBBS_PROMOTION_URL }}" not in workflow
 
 
 def test_workflow_runs_each_adapter_in_an_independent_non_fail_fast_job() -> None:

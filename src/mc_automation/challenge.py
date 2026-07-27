@@ -28,6 +28,22 @@ class EsaSliderChallengeResolver:
     TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"
     CLEAR_PAGE_MARKERS = ("aliyunCaptcha", "captcha-element", "安全验证")
     CHALLENGE_TITLES = ("滑动验证页面",)
+    CLOUDFLARE_BLOCK_MARKERS = (
+        "attention required",
+        "sorry, you have been blocked",
+        "access denied",
+    )
+    CLOUDFLARE_WAIT_MARKERS = (
+        "just a moment",
+        "checking your browser",
+        "verify you are human",
+        "验证您是真人",
+    )
+    CLOUDFLARE_FRAME_MARKERS = (
+        "challenges.cloudflare.com",
+        "/cdn-cgi/challenge-platform/",
+        "/turnstile/",
+    )
     HORIZONTAL_GRAB_RANGE = (0.22, 0.78)
     VERTICAL_GRAB_RANGE = (0.28, 0.72)
     END_OVERSHOOT_RANGE = (0.36, 0.40)
@@ -382,10 +398,13 @@ class EsaSliderChallengeResolver:
             headers=request_kwargs.get("headers"),
         ).prepare()
         prepared_url = str(prepared.url or url)
-        await page.goto(
+        navigation_response = await page.goto(
             prepared_url,
             wait_until="domcontentloaded",
             timeout=round(max(timeout) * 1000),
+        )
+        await self._log_playwright_navigation_response(
+            navigation_response, expected_url=prepared_url
         )
         await self._settle_playwright_page(page)
         await self._log_playwright_page_state(page, expected_url=prepared_url)
@@ -408,11 +427,12 @@ class EsaSliderChallengeResolver:
     ) -> requests.Response | None:
         parsed = urlsplit(url)
         origin = urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
-        await page.goto(
+        navigation_response = await page.goto(
             origin,
             wait_until="domcontentloaded",
             timeout=round(max(timeout) * 1000),
         )
+        await self._log_playwright_navigation_response(navigation_response, expected_url=origin)
         await self._settle_playwright_page(page)
         cleared = await self._page_is_clear(page, expected_url=origin)
         if not cleared:
@@ -487,16 +507,33 @@ class EsaSliderChallengeResolver:
             timeout=max(timeout),
         )
         if not isinstance(result, dict):
+            log_step("esa_fetch_response", site="minebbs", status="failed", method=method)
             return None
         final_url = result.get("url")
         text = result.get("text")
         if not isinstance(final_url, str) or not isinstance(text, str):
+            log_step("esa_fetch_response", site="minebbs", status="failed", method=method)
             return None
         try:
             status_code = int(result.get("status", 0))
         except (TypeError, ValueError):
+            log_step("esa_fetch_response", site="minebbs", status="failed", method=method)
             return None
         prepared_url = str(prepared.url or "")
+        log_step(
+            "esa_fetch_response",
+            site="minebbs",
+            status="observed",
+            method=method,
+            url=prepared_url,
+            status_code=status_code,
+            redirect_target=final_url,
+            page_class=self._classify_page(
+                status_code=status_code,
+                url=final_url,
+                text=text,
+            ),
+        )
         if not 100 <= status_code <= 599:
             return None
         if not self._is_same_origin(final_url, prepared_url) or not self._browser_text_is_clear(
@@ -530,6 +567,79 @@ class EsaSliderChallengeResolver:
                 "id='captcha-element'",
                 *cls.CHALLENGE_TITLES,
             )
+        )
+
+    @classmethod
+    def _classify_page(
+        cls,
+        *,
+        status_code: int | None = None,
+        title: str = "",
+        url: str = "",
+        text: str = "",
+        marker_names: Sequence[object] = (),
+    ) -> str:
+        """Return a bounded public category without exposing page text or titles."""
+
+        sample = "\n".join(
+            (
+                title,
+                url,
+                text[:200_000],
+                " ".join(str(marker) for marker in marker_names[:20]),
+            )
+        ).casefold()
+        esa_markers = (
+            cls.HANDLE_SELECTOR.removeprefix("#").casefold(),
+            cls.TRACK_SELECTOR.removeprefix("#").casefold(),
+            "aliyuncaptcha",
+            "captcha-element",
+            *(marker.casefold() for marker in cls.CHALLENGE_TITLES),
+        )
+        if any(marker in sample for marker in esa_markers):
+            return "esa"
+        if any(marker in sample for marker in cls.CLOUDFLARE_BLOCK_MARKERS):
+            return "cloudflare_block"
+        if any(marker in sample for marker in cls.CLOUDFLARE_FRAME_MARKERS) or any(
+            marker in sample for marker in cls.CLOUDFLARE_WAIT_MARKERS
+        ):
+            return "cloudflare_waiting"
+        if status_code in {401, 403, 429}:
+            return "http_block"
+        if status_code is not None and not 100 <= status_code <= 399:
+            return "http_error"
+        if title or text:
+            return "normal"
+        return "unknown"
+
+    @classmethod
+    async def _log_playwright_navigation_response(cls, response: Any, *, expected_url: str) -> None:
+        status_value = getattr(response, "status", None)
+        if callable(status_value):
+            status_value = status_value()
+        if inspect.isawaitable(status_value):
+            status_value = await status_value
+        try:
+            status_code = int(status_value) if status_value is not None else None
+        except (TypeError, ValueError):
+            status_code = None
+
+        response_url = getattr(response, "url", expected_url)
+        if callable(response_url):
+            response_url = response_url()
+        if inspect.isawaitable(response_url):
+            response_url = await response_url
+        log_step(
+            "esa_navigation_response",
+            site="minebbs",
+            status="observed",
+            url=expected_url,
+            redirect_target=str(response_url or expected_url),
+            status_code=status_code,
+            page_class=cls._classify_page(
+                status_code=status_code,
+                url=str(response_url or expected_url),
+            ),
         )
 
     @staticmethod
@@ -957,6 +1067,7 @@ class EsaSliderChallengeResolver:
                     .filter(v => v && /captcha|slider|slide|track|drag|aliyun|waf|nc-/i.test(v));
                   return {
                     href: location.href,
+                    title: document.title,
                     readyState: document.readyState,
                     hasBody: !!document.body,
                     containerCount: containers.length,
@@ -976,15 +1087,58 @@ class EsaSliderChallengeResolver:
                 frame_count=len(getattr(page, "frames", [])),
             )
             return
-        href = str(state.get("href", "")) if isinstance(state, dict) else ""
+        if not isinstance(state, dict):
+            log_step(
+                "esa_page_state",
+                site="minebbs",
+                status="failed",
+                frame_count=len(getattr(page, "frames", [])),
+            )
+            return
+        href = str(state.get("href", ""))
+        title = str(state.get("title", ""))
+        marker_names = state.get("markerNames", [])
+        if not isinstance(marker_names, Sequence) or isinstance(
+            marker_names, (str, bytes, bytearray)
+        ):
+            marker_names = []
+        frame_urls: list[str] = []
+        frame_classes: list[str] = []
+        frames = list(getattr(page, "frames", []))
+        for frame in frames:
+            frame_url = getattr(frame, "url", "")
+            if callable(frame_url):
+                frame_url = frame_url()
+            if inspect.isawaitable(frame_url):
+                frame_url = await frame_url
+            frame_title = ""
+            title_method = getattr(frame, "title", None)
+            if callable(title_method):
+                try:
+                    frame_title = title_method()
+                    if inspect.isawaitable(frame_title):
+                        frame_title = await frame_title
+                except Exception:
+                    frame_title = ""
+            frame_urls.append(str(frame_url or ""))
+            frame_classes.append(
+                cls._classify_page(title=str(frame_title or ""), url=str(frame_url or ""))
+            )
         log_step(
             "esa_page_state",
             site="minebbs",
             status="observed",
-            frame_count=len(getattr(page, "frames", [])),
+            frame_count=len(frames),
+            frame_urls=frame_urls,
+            frame_classes=frame_classes,
             container_count=int(state.get("containerCount", 0)),
             descendant_count=int(state.get("descendantCount", 0)),
-            marker_names=state.get("markerNames", []),
+            marker_names=marker_names,
+            page_class=cls._classify_page(
+                title=title,
+                url=href,
+                marker_names=marker_names,
+            ),
             ready_state=str(state.get("readyState", "")),
             has_body=bool(state.get("hasBody")),
             final_origin_matches=(

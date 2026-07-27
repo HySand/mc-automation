@@ -42,6 +42,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   bypass header, proxy-based WAF bypass, or public/private routing switch.
 - KLPBBS promotion needs only `KLPBBS_PROMOTION_ENABLED`,
   `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS`, and a required same-origin `KLPBBS_PROMOTION_URL`.
+  GitHub Actions injects `KLPBBS_PROMOTION_URL` from an Actions Secret so the account-specific
+  referral value is masked in job environment output; local `.env` usage keeps the same key.
   There is no configured visit cap; one run consumes each proxy at most once and ends when the
   authenticated task page proves completion or the loaded pool is exhausted. The obsolete visit
   cap, proxy-target URL, and marker keys must not be restored.

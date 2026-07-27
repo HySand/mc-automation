@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ import requests
 
 from mc_automation import challenge
 from mc_automation.challenge import EsaSliderChallengeResolver
+from mc_automation.step_log import LOGGER_NAME
 
 
 class FakeClock:
@@ -381,6 +383,64 @@ def test_browser_response_allows_generic_security_copy_but_rejects_esa_shell() -
         '<div id="captcha-element"><div id="aliyunCaptcha-sliding-slider"></div></div>',
     )
     assert not resolver._browser_text_is_clear(403, "access denied")
+
+
+def test_page_classification_distinguishes_cloudflare_and_esa() -> None:
+    resolver = EsaSliderChallengeResolver()
+
+    assert resolver._classify_page(title="Attention Required! | Cloudflare") == "cloudflare_block"
+    assert (
+        resolver._classify_page(
+            url="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g"
+        )
+        == "cloudflare_waiting"
+    )
+    assert resolver._classify_page(marker_names=["aliyunCaptcha-sliding-slider"]) == "esa"
+    assert resolver._classify_page(status_code=403, text="denied") == "http_block"
+
+
+def test_playwright_page_state_logs_sanitized_frame_paths(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ChallengeFrame:
+        url = "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g?ray=do-not-log"
+
+        async def title(self) -> str:
+            return "Just a moment... private title"
+
+    class BrowserPage:
+        frames = [ChallengeFrame()]
+
+        async def evaluate(self, _script: str) -> dict[str, object]:
+            return {
+                "href": "https://www.minebbs.com/login/?token=do-not-log",
+                "title": "登录 | MineBBS 我的世界中文论坛",
+                "readyState": "complete",
+                "hasBody": True,
+                "containerCount": 0,
+                "descendantCount": 0,
+                "markerNames": [],
+            }
+
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)
+
+    asyncio.run(
+        EsaSliderChallengeResolver._log_playwright_page_state(
+            BrowserPage(), expected_url="https://www.minebbs.com/login/"
+        )
+    )
+
+    output = caplog.records[-1].message
+    metadata = json.loads(output)["metadata"]
+    assert metadata["page_class"] == "normal"
+    assert metadata["frame_classes"] == ["cloudflare_waiting"]
+    assert metadata["frame_urls"] == [
+        "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g"
+    ]
+    assert "do-not-log" not in output
+    assert "private title" not in output
 
 
 def test_browser_transport_refuses_cross_origin_after_origin_is_bound() -> None:
