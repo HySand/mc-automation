@@ -38,7 +38,7 @@
 | `RANK_THRESHOLD` | `8` | KLPBBS 排名门槛；排名大于该值时尝试顶贴 |
 | `KLPBBS_PROMOTION_ENABLED` | `false` | 启用 KLPBBS 官方推广任务 |
 | `KLPBBS_PROMOTION_URL` | 空 | KLPBBS 账号的同源推广链接，例如 `https://klpbbs.com/?fromuid=123456`；启用推广时必填 |
-| `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS` | `2` | 串行代理点击间隔，最低 `0.5` 秒 |
+| `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS` | `0.5` | 有效代理访问后的串行间隔；失败代理立即跳过，最低 `0.5` 秒 |
 | `PAID_BUMP_COOLDOWN_SECONDS` | `3600` | KLPBBS 付费顶贴冷却 |
 | `MINEBBS_BUMP_INTERVAL_HOURS` | `16` | MineBBS 顶贴间隔 |
 | `MINEBBS_ESA_SLIDER_ENABLED` | `false` | 启用基于 `nodriver` DOM 几何的 MineBBS ESA 非 AI 滑块处理 |

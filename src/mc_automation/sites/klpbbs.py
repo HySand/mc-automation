@@ -296,7 +296,6 @@ class KLPBBSAdapter:
             attempts += 1
             proxy_successes += int(proxy_succeeded)
             if not proxy_succeeded:
-                time.sleep(self.config.promotion_visit_delay_seconds)
                 continue
             task = self._load_promotion_task("home.php?mod=task&item=doing")
             if task is None:

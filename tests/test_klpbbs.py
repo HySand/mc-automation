@@ -397,7 +397,9 @@ def test_promotion_task_detects_completion_on_final_pool_check() -> None:
     ]
 
 
-def test_promotion_task_continues_failed_proxies_until_pool_exhaustion() -> None:
+def test_promotion_task_continues_failed_proxies_without_delay_until_pool_exhaustion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     task_url = "https://example.test/home.php?mod=task"
     doing_url = "https://example.test/home.php?mod=task&item=doing"
     visit_url = "https://example.test/promotion?fromuid=5"
@@ -411,6 +413,8 @@ def test_promotion_task_continues_failed_proxies_until_pool_exhaustion() -> None
         }
     )
     visitor = FakePromotionVisitor([False, False])
+    sleeps: list[float] = []
+    monkeypatch.setattr("mc_automation.sites.klpbbs.time.sleep", sleeps.append)
     adapter = KLPBBSAdapter(
         promotion_config(),
         transport,
@@ -424,6 +428,7 @@ def test_promotion_task_continues_failed_proxies_until_pool_exhaustion() -> None
     assert result.metadata == {"attempts": 2, "proxy_successes": 0}
     assert visitor.urls == [visit_url, visit_url, visit_url]
     assert [call[1] for call in transport.calls] == [task_url, doing_url]
+    assert sleeps == []
 
 
 def test_promotion_task_draws_already_completed_reward_without_proxy_requests() -> None:

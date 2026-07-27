@@ -164,7 +164,7 @@ class SiteConfig:
     base_url: str = ""
     promotion_enabled: bool = False
     promotion_url: str = ""
-    promotion_visit_delay_seconds: float = 2.0
+    promotion_visit_delay_seconds: float = 0.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,7 +274,7 @@ class AppConfig:
                 promotion_enabled=promotion_enabled,
                 promotion_url=promotion_url,
                 promotion_visit_delay_seconds=_minimum_float(
-                    source, "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS", 2.0, 0.5
+                    source, "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS", 0.5, 0.5
                 ),
             )
 
