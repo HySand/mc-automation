@@ -4,7 +4,11 @@
 
 ## 工作方式
 
-- GitHub Actions 每小时检查所有启用站点，也支持 `workflow_dispatch` 手动运行。
+- GitHub Actions 每小时以独立 Job 运行 KLPBBS、MineBBS、WDSJFWQ 和 MCLists，也支持
+  `workflow_dispatch` 手动运行。任一站点失败不会取消、跳过或阻塞其他站点。
+
+默认日志是面向人的中文阶段日志，会隐藏逐代理失败和底层 HTTP 往返噪声。需要完整 JSONL
+诊断时设置 `MC_AUTOMATION_LOG_FORMAT=json`。
 - GitHub Actions 建立系统级 Cloudflare WARP 全隧道路由并检查 `warp=on`；WARP 建立或检查失败时终止任务。
 - KLPBBS 只有排名大于阈值（默认 `8`）后才会使用官方顶贴道具。
 - MineBBS 不使用排名作为门槛，两次成功顶贴默认间隔 16 小时。

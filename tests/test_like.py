@@ -225,7 +225,9 @@ def test_wdsjfwq_adapter_solves_captcha_and_submits_random_username() -> None:
 
 def test_wdsjfwq_logs_captcha_pipeline_without_values(
     caplog: object,
+    monkeypatch: object,
 ) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")  # type: ignore[attr-defined]
     caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
     page = "https://example.test/server-1991/vote.html?private=1"
     captcha = "https://example.test/captcha.png?nonce=secret"

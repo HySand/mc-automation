@@ -41,7 +41,10 @@ def test_transport_returns_normal_page() -> None:
 
 
 @responses.activate
-def test_transport_logs_request_and_response_without_query_values(caplog: object) -> None:
+def test_transport_logs_request_and_response_without_query_values(
+    caplog: object, monkeypatch: object
+) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")  # type: ignore[attr-defined]
     caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
     responses.get("https://example.test/path?secret=value", body="private-body", status=200)
 

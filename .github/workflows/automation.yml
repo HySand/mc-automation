@@ -13,36 +13,75 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  bump:
+  adapter:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - site: klpbbs
+            label: KLPBBS
+            klpbbs_enabled: ${{ vars.KLPBBS_ENABLED || 'false' }}
+            minebbs_enabled: "false"
+            wdsjfwq_enabled: "false"
+            mclists_enabled: "false"
+            browser_enabled: "false"
+            ai_enabled: "false"
+          - site: minebbs
+            label: MineBBS
+            klpbbs_enabled: "false"
+            minebbs_enabled: ${{ vars.MINEBBS_ENABLED || 'false' }}
+            wdsjfwq_enabled: "false"
+            mclists_enabled: "false"
+            browser_enabled: ${{ vars.MINEBBS_ESA_SLIDER_ENABLED || 'false' }}
+            ai_enabled: "false"
+          - site: wdsjfwq
+            label: WDSJFWQ
+            klpbbs_enabled: "false"
+            minebbs_enabled: "false"
+            wdsjfwq_enabled: ${{ vars.WDSJFWQ_ENABLED || 'false' }}
+            mclists_enabled: "false"
+            browser_enabled: "false"
+            ai_enabled: ${{ vars.AI_SOLVER_ENABLED || 'false' }}
+          - site: mclists
+            label: MCLists
+            klpbbs_enabled: "false"
+            minebbs_enabled: "false"
+            wdsjfwq_enabled: "false"
+            mclists_enabled: ${{ vars.MCLISTS_ENABLED || 'false' }}
+            browser_enabled: "false"
+            ai_enabled: "false"
+
     runs-on: ${{ vars.AUTOMATION_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     env:
-      KLPBBS_ENABLED: ${{ vars.KLPBBS_ENABLED || 'false' }}
+      MC_AUTOMATION_LOG_FORMAT: human
+      KLPBBS_ENABLED: ${{ matrix.klpbbs_enabled }}
       KLPBBS_USERNAME: ${{ secrets.KLPBBS_USERNAME }}
       KLPBBS_PASSWORD: ${{ secrets.KLPBBS_PASSWORD }}
       KLPBBS_THREAD_ID: ${{ secrets.KLPBBS_THREAD_ID }}
       KLPBBS_BASE_URL: ${{ vars.KLPBBS_BASE_URL || 'https://klpbbs.com' }}
-      KLPBBS_PROMOTION_ENABLED: ${{ vars.KLPBBS_PROMOTION_ENABLED || 'false' }}
+      KLPBBS_PROMOTION_ENABLED: ${{ matrix.klpbbs_enabled == 'true' && (vars.KLPBBS_PROMOTION_ENABLED || 'false') || 'false' }}
       KLPBBS_PROMOTION_URL: ${{ vars.KLPBBS_PROMOTION_URL }}
       KLPBBS_PROMOTION_VISIT_DELAY_SECONDS: ${{ vars.KLPBBS_PROMOTION_VISIT_DELAY_SECONDS || '0.5' }}
-      MINEBBS_ENABLED: ${{ vars.MINEBBS_ENABLED || 'false' }}
+      MINEBBS_ENABLED: ${{ matrix.minebbs_enabled }}
       MINEBBS_USERNAME: ${{ secrets.MINEBBS_USERNAME }}
       MINEBBS_PASSWORD: ${{ secrets.MINEBBS_PASSWORD }}
       MINEBBS_THREAD_ID: ${{ secrets.MINEBBS_THREAD_ID }}
       MINEBBS_BASE_URL: ${{ vars.MINEBBS_BASE_URL || 'https://www.minebbs.com' }}
       MINEBBS_BUMP_INTERVAL_HOURS: ${{ vars.MINEBBS_BUMP_INTERVAL_HOURS || '16' }}
-      MINEBBS_ESA_SLIDER_ENABLED: ${{ vars.MINEBBS_ESA_SLIDER_ENABLED || 'false' }}
+      MINEBBS_ESA_SLIDER_ENABLED: ${{ matrix.browser_enabled }}
       MINEBBS_BROWSER_EXECUTABLE_PATH: ${{ vars.MINEBBS_BROWSER_EXECUTABLE_PATH }}
-      AI_SOLVER_ENABLED: ${{ vars.AI_SOLVER_ENABLED || 'false' }}
+      AI_SOLVER_ENABLED: ${{ matrix.ai_enabled }}
       AI_SOLVER_ENDPOINT: ${{ secrets.AI_SOLVER_ENDPOINT }}
       AI_SOLVER_API_KEY: ${{ secrets.AI_SOLVER_API_KEY }}
       AI_SOLVER_MODEL: ${{ vars.AI_SOLVER_MODEL }}
       AI_SOLVER_TIMEOUT_SECONDS: ${{ vars.AI_SOLVER_TIMEOUT_SECONDS || '60' }}
       AI_SOLVER_MAX_ATTEMPTS: ${{ vars.AI_SOLVER_MAX_ATTEMPTS || '1' }}
-      AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED: ${{ vars.AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED }}
-      WDSJFWQ_ENABLED: ${{ vars.WDSJFWQ_ENABLED || 'false' }}
+      AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED: ${{ matrix.wdsjfwq_enabled == 'true' && (vars.AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED || vars.AI_SOLVER_ENABLED || 'false') || 'false' }}
+      WDSJFWQ_ENABLED: ${{ matrix.wdsjfwq_enabled }}
       WDSJFWQ_LIKE_URL: ${{ vars.WDSJFWQ_LIKE_URL || 'https://www.wdsjfwq.com/server-1991/vote.html' }}
-      MCLISTS_ENABLED: ${{ vars.MCLISTS_ENABLED || 'false' }}
+      MCLISTS_ENABLED: ${{ matrix.mclists_enabled }}
       MCLISTS_LIKE_URL: ${{ vars.MCLISTS_LIKE_URL || 'https://www.mclists.cn/server/9969.html' }}
       RANK_THRESHOLD: ${{ vars.RANK_THRESHOLD || '8' }}
       PAID_BUMP_COOLDOWN_SECONDS: ${{ vars.PAID_BUMP_COOLDOWN_SECONDS || '3600' }}
@@ -72,18 +111,19 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Restore operational state
+      - name: Restore ${{ matrix.label }} state
         id: state_cache
         uses: actions/cache/restore@v4
         with:
           path: .state/state.json
-          key: mc-automation-state-v2-${{ github.run_id }}
+          key: mc-automation-${{ matrix.site }}-state-v3-${{ github.run_id }}
           restore-keys: |
+            mc-automation-${{ matrix.site }}-state-v3-
             mc-automation-state-v2-
             mc-automation-state-
 
       - name: Clear legacy MineBBS ESA suspension
-        if: startsWith(steps.state_cache.outputs.cache-matched-key, 'mc-automation-state-') && !startsWith(steps.state_cache.outputs.cache-matched-key, 'mc-automation-state-v2-')
+        if: matrix.site == 'minebbs' && startsWith(steps.state_cache.outputs.cache-matched-key, 'mc-automation-state-') && !startsWith(steps.state_cache.outputs.cache-matched-key, 'mc-automation-state-v2-')
         shell: python
         run: |
           import json
@@ -118,7 +158,7 @@ jobs:
             python -m pip install .
           fi
 
-      - name: Run automation
+      - name: Run ${{ matrix.label }} automation
         id: automation
         shell: bash
         run: |
@@ -133,18 +173,18 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Save operational state
+      - name: Save ${{ matrix.label }} state
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .state/state.json
-          key: mc-automation-state-v2-${{ github.run_id }}
+          key: mc-automation-${{ matrix.site }}-state-v3-${{ github.run_id }}
 
-      - name: Propagate automation result
+      - name: Report ${{ matrix.label }} result
         if: always() && steps.automation.outputs.exit_code != '0'
         shell: bash
         env:
           AUTOMATION_EXIT_CODE: ${{ steps.automation.outputs.exit_code }}
         run: |
-          echo "Automation requested attention (exit $AUTOMATION_EXIT_CODE)."
+          echo "${{ matrix.label }} 需要处理（退出码 $AUTOMATION_EXIT_CODE），其他站点任务不受影响。"
           exit "$AUTOMATION_EXIT_CODE"

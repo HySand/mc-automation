@@ -241,7 +241,7 @@ def test_browser_extra_and_workflow_use_nodriver() -> None:
     assert legacy_browser_command not in workflow.casefold()
     assert "MINEBBS_ESA_SLIDER_ENABLED" in workflow
     assert "MINEBBS_BROWSER_EXECUTABLE_PATH" in workflow
-    assert "mc-automation-state-v2-${{ github.run_id }}" in workflow
+    assert "mc-automation-${{ matrix.site }}-state-v3-${{ github.run_id }}" in workflow
     assert "Clear legacy MineBBS ESA suspension" in workflow
     assert 'minebbs["challenge_count"] = 0' in workflow
     assert 'minebbs["suspended_until"] = None' in workflow
@@ -256,3 +256,17 @@ def test_workflow_enforces_warp_and_keeps_promotion_proxy_configuration_separate
     assert "KLPBBS_PROMOTION_PROXY_TARGET_URL" not in workflow
     assert "KLPBBS_PROMOTION_TARGET_MARKER" not in workflow
     assert "KLPBBS_PROMOTION_URL" in workflow
+
+
+def test_workflow_runs_each_adapter_in_an_independent_non_fail_fast_job() -> None:
+    root = Path(__file__).parents[1]
+    workflow = (root / ".github" / "workflows" / "automation.yml").read_text(encoding="utf-8")
+
+    assert "fail-fast: false" in workflow
+    for site in ("klpbbs", "minebbs", "wdsjfwq", "mclists"):
+        assert f"- site: {site}" in workflow
+    assert "KLPBBS_ENABLED: ${{ matrix.klpbbs_enabled }}" in workflow
+    assert "MINEBBS_ENABLED: ${{ matrix.minebbs_enabled }}" in workflow
+    assert "WDSJFWQ_ENABLED: ${{ matrix.wdsjfwq_enabled }}" in workflow
+    assert "MCLISTS_ENABLED: ${{ matrix.mclists_enabled }}" in workflow
+    assert "其他站点任务不受影响" in workflow

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from enum import Enum
@@ -10,6 +11,81 @@ from urllib.parse import urlsplit, urlunsplit
 
 LOGGER_NAME = "mc_automation.steps"
 REDACTED = "[REDACTED]"
+LOG_FORMAT_ENV = "MC_AUTOMATION_LOG_FORMAT"
+
+SITE_LABELS = {
+    "system": "系统",
+    "klpbbs": "KLPBBS",
+    "minebbs": "MineBBS",
+    "wdsjfwq": "WDSJFWQ",
+    "mclists": "MCLists",
+}
+
+PHASE_LABELS = {
+    "application": "程序",
+    "configuration": "配置",
+    "state_load": "读取状态",
+    "adapter_setup": "初始化适配器",
+    "orchestration": "执行任务",
+    "site_run": "站点任务",
+    "suspension_check": "暂停检查",
+    "authenticate": "登录",
+    "daily_sign_in": "签到",
+    "promotion": "推广任务",
+    "promotion_proxy_source": "代理源",
+    "promotion_proxy_visit": "推广访问",
+    "promotion_task_progress": "推广进度",
+    "rank_check": "排名检查",
+    "ownership_check": "所有权检查",
+    "inventory": "道具库存",
+    "purchase_bump_item": "购买顶帖道具",
+    "apply_bump_item": "使用顶帖道具",
+    "security_challenge": "安全验证",
+    "challenge_resolution": "验证处理",
+    "site_action": "站点操作",
+    "captcha_recognition": "验证码识别",
+    "form_submission": "提交表单",
+    "action_result": "任务结果",
+    "state_save": "保存状态",
+    "summary_write": "生成摘要",
+}
+
+STATUS_LABELS = {
+    "started": "开始",
+    "completed": "完成",
+    "failed": "失败",
+    "skipped": "跳过",
+    "detected": "检测到",
+    "info": "信息",
+}
+
+RESULT_STATUS_LABELS = {
+    "success": "成功",
+    "skipped": "已跳过",
+    "insufficient_resources": "资源不足",
+    "manual_intervention": "需要人工处理",
+    "technical_failure": "技术错误",
+}
+
+ACTION_LABELS = {
+    "authenticate": "登录",
+    "daily_sign_in": "签到",
+    "promotion_task": "推广任务",
+    "eligibility": "资格检查",
+    "site_run": "站点任务",
+    "security_challenge": "安全验证",
+    "like": "点赞/投票",
+    "purchase_bump_item": "购买顶帖道具",
+    "apply_bump_item": "使用顶帖道具",
+}
+
+QUIET_HUMAN_PHASES = frozenset(
+    {
+        "http_request",
+        "http_response",
+        "promotion_proxy_visit_failed",
+    }
+)
 
 SafeScalar: TypeAlias = str | int | float | bool | None
 SafeValue: TypeAlias = SafeScalar | list[SafeScalar] | dict[str, SafeScalar]
@@ -127,6 +203,51 @@ def _safe_value(key: str, value: object) -> SafeValue:
     return _scalar(value)
 
 
+def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
+    preferred = (
+        ("action", "操作", ""),
+        ("progress_percent", "进度", "%"),
+        ("proxy_successes", "有效访问", ""),
+        ("attempts", "已尝试", ""),
+        ("proxy_count", "代理数", ""),
+        ("source_name", "来源", ""),
+        ("rank", "排名", ""),
+        ("threshold", "阈值", ""),
+        ("result_status", "结果", ""),
+        ("status_code", "HTTP", ""),
+        ("exception_type", "错误", ""),
+        ("exit_code", "退出码", ""),
+        ("challenge_kind", "验证类型", ""),
+        ("initial_count", "操作前", ""),
+        ("refreshed_count", "操作后", ""),
+    )
+    parts: list[str] = []
+    for key, label, suffix in preferred:
+        value = metadata.get(key)
+        if value is not None:
+            if key == "result_status":
+                value = RESULT_STATUS_LABELS.get(str(value), value)
+            elif key == "action":
+                value = ACTION_LABELS.get(str(value), value)
+            parts.append(f"{label} {value}{suffix}")
+    return " | ".join(parts)
+
+
+def _human_message(
+    phase: str, site: str, status: str, metadata: Mapping[str, SafeValue]
+) -> str | None:
+    if phase == "promotion_proxy_visit" and status != "completed":
+        return None
+    if phase in QUIET_HUMAN_PHASES:
+        return None
+    site_label = SITE_LABELS.get(site, site)
+    phase_label = PHASE_LABELS.get(phase, phase.replace("_", " "))
+    status_label = STATUS_LABELS.get(status, status)
+    details = _human_metadata(metadata)
+    message = f"[{site_label}] {phase_label}：{status_label}"
+    return f"{message} | {details}" if details else message
+
+
 def log_step(
     phase: str,
     *,
@@ -152,6 +273,10 @@ def log_step(
         "status": status,
         "metadata": safe_metadata,
     }
-    logging.getLogger(LOGGER_NAME).info(
-        json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    )
+    logger = logging.getLogger(LOGGER_NAME)
+    if os.environ.get(LOG_FORMAT_ENV, "human").strip().casefold() == "json":
+        logger.info(json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
+        return
+    message = _human_message(phase, site, status, safe_metadata)
+    if message is not None:
+        logger.info(message)

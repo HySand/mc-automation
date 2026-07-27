@@ -17,7 +17,9 @@ def test_safe_url_removes_credentials_query_and_fragment() -> None:
 
 def test_step_log_is_json_and_rejects_unapproved_metadata(
     caplog: object,
+    monkeypatch: object,
 ) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")  # type: ignore[attr-defined]
     caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
 
     log_step(
@@ -42,3 +44,25 @@ def test_step_log_is_json_and_rejects_unapproved_metadata(
     assert "token=abc" not in output
     assert "Z9K2" not in output
     assert "raw-body" not in output
+
+
+def test_step_log_defaults_to_human_readable_and_hides_failed_proxy_noise(
+    caplog: object, monkeypatch: object
+) -> None:
+    monkeypatch.delenv("MC_AUTOMATION_LOG_FORMAT", raising=False)  # type: ignore[attr-defined]
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
+
+    log_step(
+        "promotion_task_progress",
+        site="klpbbs",
+        status="completed",
+        progress_percent=30,
+        proxy_successes=3,
+        attempts=40,
+    )
+    log_step("promotion_proxy_visit", site="klpbbs", status="failed", action=41)
+
+    assert len(caplog.records) == 1  # type: ignore[attr-defined]
+    assert caplog.records[0].message == (  # type: ignore[attr-defined]
+        "[KLPBBS] 推广进度：完成 | 进度 30% | 有效访问 3 | 已尝试 40"
+    )

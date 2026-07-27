@@ -20,7 +20,7 @@ from .sites.klpbbs import KLPBBSAdapter
 from .sites.like import LikeAdapter
 from .sites.minebbs import MineBBSAdapter
 from .state import StateStore
-from .step_log import log_step
+from .step_log import ACTION_LABELS, LOG_FORMAT_ENV, RESULT_STATUS_LABELS, SITE_LABELS, log_step
 from .transport import ChallengeResolver, HttpTransport, create_cloudscraper_session
 
 
@@ -49,7 +49,14 @@ def _load_local_environment() -> None:
 
 
 def _print_report(report: RunReport) -> None:
-    print(json.dumps([item.to_dict() for item in report.results], ensure_ascii=False))
+    if os.environ.get(LOG_FORMAT_ENV, "human").strip().casefold() == "json":
+        print(json.dumps([item.to_dict() for item in report.results], ensure_ascii=False))
+        return
+    for item in report.results:
+        site = SITE_LABELS.get(item.site, item.site)
+        action = ACTION_LABELS.get(item.action, item.action)
+        status = RESULT_STATUS_LABELS.get(item.status.value, item.status.value)
+        print(f"[{site}] {action}：{status} - {item.message}")
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -212,9 +219,10 @@ def run(argv: list[str] | None = None) -> int:
     log_step("summary_write", status="started" if summary_path is not None else "skipped")
     _write_summary(report, summary_path)
     log_step("summary_write", status="completed" if summary_path is not None else "skipped")
-    for result in report.results:
-        safe = redact(json.dumps(result.to_dict(), ensure_ascii=False), secrets)
-        logging.info(safe)
+    if os.environ.get(LOG_FORMAT_ENV, "human").strip().casefold() == "json":
+        for result in report.results:
+            safe = redact(json.dumps(result.to_dict(), ensure_ascii=False), secrets)
+            logging.info(safe)
     log_step(
         "application",
         status="completed",

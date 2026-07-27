@@ -390,6 +390,12 @@ confidence, code length, field names, and public count changes without image/cod
 logs browser lifecycle, DOM dimensions, drag point count/duration, clearance, and cookie counts
 without cookie values, browser profile paths, or page bodies.
 
+GitHub Actions runs one non-fail-fast matrix Job per adapter with exactly one site enabled and a
+site-scoped state-cache key. One adapter's install, network, parser, challenge, or business failure
+must not cancel or gate another adapter Job. Human-readable step logs are the default and suppress
+per-proxy failures plus raw HTTP request/response noise; `MC_AUTOMATION_LOG_FORMAT=json` restores the
+complete allowlisted JSONL diagnostic stream.
+
 ## Validation matrix
 
 | Condition | Required behavior |

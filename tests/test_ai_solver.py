@@ -80,7 +80,9 @@ def test_wdsjfwq_captcha_solver_builds_openai_compatible_vision_request() -> Non
 
 def test_solver_logs_metadata_without_secret_image_or_captcha(
     caplog: object,
+    monkeypatch: object,
 ) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")  # type: ignore[attr-defined]
     caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
     client = FakeClient([FakeResponse(chat_payload('{"code":"AB12","confidence":0.91}'))])
 

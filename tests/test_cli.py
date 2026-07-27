@@ -14,6 +14,7 @@ def test_dry_run_needs_no_configuration_and_uses_no_network(capsys: object) -> N
 def test_missing_credentials_emit_manual_intervention_summary(
     tmp_path: Path, monkeypatch: object, capsys: object
 ) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("KLPBBS_ENABLED", "true")
     monkeypatch.setenv("KLPBBS_USERNAME", "owner")
@@ -30,6 +31,7 @@ def test_missing_credentials_emit_manual_intervention_summary(
 def test_all_sites_disabled_is_a_successful_safe_skip(
     tmp_path: Path, monkeypatch: object, capsys: object
 ) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("KLPBBS_ENABLED", "false")
     monkeypatch.setenv("MINEBBS_ENABLED", "false")
