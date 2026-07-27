@@ -174,6 +174,8 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
     }
     assert all(session.cookies.cleared and not session.trust_env for session in created_sessions)
     assert all("Cookie" not in session.headers and session.closed for session in created_sessions)
+    assert all(session.headers["Referer"] == "https://klpbbs.com/" for session in created_sessions)
+    assert all("Mozilla/5.0" in session.headers["User-Agent"] for session in created_sessions)
     assert all(
         call[1]["allow_redirects"] is False
         for session in created_sessions

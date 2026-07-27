@@ -20,6 +20,11 @@ DEFAULT_PROXY_LIMIT = 500
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 DEFAULT_PROXY_WORKERS = 20
 MAX_PROMOTION_REDIRECTS = 3
+PROMOTION_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 "
+    "Safari/537.36 Edg/116.0.1938.81"
+)
 
 
 class ProxyPoolExhausted(TransportError):
@@ -304,8 +309,9 @@ class ProxyPromotionVisitor:
         session.headers.clear()
         session.headers.update(
             {
-                "User-Agent": "mc-automation/0.1 promotion-proxy-client",
-                "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+                "User-Agent": PROMOTION_USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Referer": f"{urlsplit(promotion_url).scheme}://{urlsplit(promotion_url).netloc}/",
             }
         )
         response: requests.Response | None = None
