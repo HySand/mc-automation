@@ -351,7 +351,9 @@ class ProxyPromotionVisitor:
             final = urlsplit(response.url)
             same_host = final.hostname == original.hostname
             fromuid_preserved = bool(parse_qs(final.query).get("fromuid"))
-            success = response.status_code == 200 and same_host and fromuid_preserved
+            # The reference implementation treats the response status as the click result.
+            # KLPBBS may rewrite the landing URL after consuming the promotion parameter.
+            success = response.status_code == 200
             log_step(
                 "promotion_proxy_visit",
                 site="klpbbs",

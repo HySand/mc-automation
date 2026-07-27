@@ -252,7 +252,7 @@ def test_proxy_visitor_matches_reference_request_behavior() -> None:
     assert all(call[1]["timeout"] == 10.0 for session in created_sessions for call in session.calls)
 
 
-def test_proxy_visitor_rejects_cross_origin_final_response() -> None:
+def test_proxy_visitor_matches_reference_status_check_after_redirect() -> None:
     session = VisitSession(
         StubResponse(
             b"",
@@ -264,19 +264,29 @@ def test_proxy_visitor_rejects_cross_origin_final_response() -> None:
         session_factory=lambda: session,
     )
 
-    assert not visitor.visit("https://klpbbs.com/promotion?fromuid=5")
+    assert visitor.visit("https://klpbbs.com/promotion?fromuid=5")
     assert session.calls[0][1]["allow_redirects"] is True
 
 
-def test_proxy_visitor_requires_promotion_parameter_on_final_response() -> None:
+def test_proxy_visitor_accepts_consumed_promotion_parameter() -> None:
     session = VisitSession(StubResponse(b"landing", url="https://klpbbs.com/forum.php"))
     visitor = ProxyPromotionVisitor(
         StaticPool(("http://8.8.8.8:8080",)),
         session_factory=lambda: session,
     )
 
-    assert not visitor.visit("https://klpbbs.com/?fromuid=5")
+    assert visitor.visit("https://klpbbs.com/?fromuid=5")
     assert [call[0] for call in session.calls] == ["https://klpbbs.com/?fromuid=5"]
+
+
+def test_proxy_visitor_rejects_non_200_response() -> None:
+    session = VisitSession(StubResponse(b"unavailable", status_code=503))
+    visitor = ProxyPromotionVisitor(
+        StaticPool(("http://8.8.8.8:8080",)),
+        session_factory=lambda: session,
+    )
+
+    assert not visitor.visit("https://klpbbs.com/?fromuid=5")
 
 
 def test_proxy_visitor_processes_one_concurrent_batch_and_reports_exhaustion() -> None:

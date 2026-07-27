@@ -57,8 +57,9 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   Cookie or CSRF token. The adapter validates the initial
   promotion URL before passing it to the visitor. The click request mirrors the known-working
   reference: a 10-second timeout, automatic redirects, and proxy-compatible disabled certificate
-  verification. A response counts as a transport success only when it is HTTP 200, its final host
-  remains the configured KLPBBS host, and its final query still contains `fromuid`.
+  verification. Matching the reference implementation, a response counts as a transport success
+  when it is HTTP 200; KLPBBS may consume `fromuid` and rewrite the final landing URL. This transport
+  result only triggers an authenticated task-progress read and never proves task completion itself.
 - A proxy timeout is an expected failed
   candidate: it consumes that proxy and immediately advances to the next one.
 - The pool globally deduplicates every candidate returned by the bounded finite sources and shuffles
