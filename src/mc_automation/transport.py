@@ -52,6 +52,7 @@ class HttpTransport:
         from .cf_waf import CloudflareWafGuard
 
         self.cf_waf_guard = CloudflareWafGuard(challenge_resolver)
+        self._browser_mode = False
         current_user_agent = str(self.session.headers.get("User-Agent", ""))
         if not current_user_agent or current_user_agent.startswith("python-requests/"):
             self.session.headers["User-Agent"] = (
@@ -82,6 +83,11 @@ class HttpTransport:
     def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         kwargs.setdefault("timeout", self.timeout)
         current_method = method.upper()
+        if self._browser_mode:
+            browser_response = self._browser_request(current_method, url, kwargs)
+            if browser_response is None:
+                raise SecurityChallenge("browser transport could not complete the request")
+            return browser_response
         challenge_attempted = False
         while True:
             started = time.monotonic()
@@ -132,6 +138,32 @@ class HttpTransport:
                 )
                 if not challenge_attempted:
                     challenge_attempted = True
+                    browser_bridge_available = current_method in {"GET", "HEAD"} and callable(
+                        getattr(self.challenge_resolver, "browser_request", None)
+                    )
+                    if browser_bridge_available:
+                        log_step(
+                            "challenge_resolution",
+                            site=self.site,
+                            status="started",
+                            method=current_method,
+                            url=url,
+                            challenge_kind=info.kind.value,
+                        )
+                        browser_response = self._browser_request(current_method, url, kwargs)
+                        log_step(
+                            "challenge_resolution",
+                            site=self.site,
+                            status="completed" if browser_response is not None else "failed",
+                            method=current_method,
+                            url=url,
+                            challenge_kind=info.kind.value,
+                            resolved=browser_response is not None,
+                        )
+                        if browser_response is not None:
+                            self._browser_mode = True
+                            return browser_response
+                        raise self.cf_waf_guard.failure(info)
                     log_step(
                         "challenge_resolution",
                         site=self.site,
@@ -160,6 +192,21 @@ class HttpTransport:
                         continue
                 raise self.cf_waf_guard.failure(info)
             return response
+
+    def _browser_request(
+        self, method: str, url: str, kwargs: dict[str, Any]
+    ) -> requests.Response | None:
+        if self.challenge_resolver is None:
+            return None
+        request_method = getattr(self.challenge_resolver, "browser_request", None)
+        if not callable(request_method):
+            return None
+        browser_kwargs = dict(kwargs)
+        browser_kwargs.pop("timeout", None)
+        return cast(
+            requests.Response | None,
+            request_method(method, url, self.session, self.timeout, **browser_kwargs),
+        )
 
     def get(self, url: str, **kwargs: Any) -> requests.Response:
         return self.request("GET", url, **kwargs)

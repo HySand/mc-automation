@@ -372,6 +372,72 @@ def test_cloakbrowser_drag_uses_unwrapped_mouse_when_humanize_is_enabled() -> No
     )
 
 
+def test_browser_response_allows_generic_security_copy_but_rejects_esa_shell() -> None:
+    resolver = EsaSliderChallengeResolver()
+
+    assert resolver._browser_text_is_clear(200, "<html>安全验证设置</html>")
+    assert not resolver._browser_text_is_clear(
+        200,
+        '<div id="captcha-element"><div id="aliyunCaptcha-sliding-slider"></div></div>',
+    )
+    assert not resolver._browser_text_is_clear(403, "access denied")
+
+
+def test_browser_transport_refuses_cross_origin_after_origin_is_bound() -> None:
+    resolver = EsaSliderChallengeResolver()
+    resolver._browser_origin = "https://www.minebbs.com/login/"
+
+    assert (
+        resolver.browser_request(
+            "GET",
+            "https://example.test/steal",
+            requests.Session(),
+            (1, 1),
+        )
+        is None
+    )
+
+
+def test_browser_transport_retries_safe_methods_but_never_replays_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolver = EsaSliderChallengeResolver(max_attempts=3)
+    calls: list[str] = []
+
+    async def unresolved(
+        _cloakbrowser: object,
+        method: str,
+        _url: str,
+        _session: requests.Session,
+        _timeout: tuple[float, float],
+        _request_kwargs: dict[str, Any],
+    ) -> None:
+        calls.append(method)
+
+    fake_cloakbrowser = SimpleNamespace(launch_persistent_context_async=object())
+    monkeypatch.setattr(challenge.importlib, "import_module", lambda _name: fake_cloakbrowser)
+    monkeypatch.setattr(resolver, "_browser_request_cloak_async", unresolved)
+
+    assert (
+        resolver.browser_request("HEAD", "https://www.minebbs.com/", requests.Session(), (1, 1))
+        is None
+    )
+    assert calls == ["HEAD", "HEAD", "HEAD"]
+
+    calls.clear()
+    assert (
+        resolver.browser_request(
+            "POST",
+            "https://www.minebbs.com/login/login",
+            requests.Session(),
+            (1, 1),
+            data={"login": "owner"},
+        )
+        is None
+    )
+    assert calls == ["POST"]
+
+
 def test_bezier_path_has_a_smooth_bounded_vertical_curve() -> None:
     resolver = EsaSliderChallengeResolver(random_source=random.Random(19))
 

@@ -27,6 +27,32 @@ class FakeChallengeResolver:
         return True
 
 
+class FakeBrowserBridgeResolver(FakeChallengeResolver):
+    def __init__(self, *, failed_methods: frozenset[str] = frozenset()) -> None:
+        super().__init__()
+        self.browser_calls: list[tuple[str, str]] = []
+        self.failed_methods = failed_methods
+
+    def browser_request(
+        self,
+        method: str,
+        url: str,
+        session: requests.Session,
+        timeout: tuple[float, float],
+        **_kwargs: object,
+    ) -> requests.Response | None:
+        del session, timeout
+        self.browser_calls.append((method, url))
+        if method in self.failed_methods:
+            return None
+        response = requests.Response()
+        response.status_code = 200
+        response.url = url
+        response._content = f"browser-{method.lower()}".encode()
+        response.encoding = "utf-8"
+        return response
+
+
 @responses.activate
 def test_transport_rejects_challenge_before_parser_sees_it() -> None:
     responses.get("https://example.test/", body="aliyunCaptcha", status=200)
@@ -94,3 +120,68 @@ def test_post_challenge_is_never_replayed() -> None:
             "https://example.test/action"
         )
     assert resolver.calls == 0
+
+
+@responses.activate
+def test_challenged_get_switches_to_browser_transport_before_any_post() -> None:
+    responses.get("https://example.test/login/", body="cf-chl-test", status=403)
+    resolver = FakeBrowserBridgeResolver()
+    transport = HttpTransport(session=requests.Session(), challenge_resolver=resolver)
+
+    get_response = transport.get("https://example.test/login/")
+    post_response = transport.post(
+        "https://example.test/login/login",
+        data={"login": "owner", "password": "secret"},
+    )
+
+    assert get_response.text == "browser-get"
+    assert post_response.text == "browser-post"
+    assert resolver.calls == 0
+    assert resolver.browser_calls == [
+        ("GET", "https://example.test/login/"),
+        ("POST", "https://example.test/login/login"),
+    ]
+
+
+@responses.activate
+def test_initial_challenged_post_does_not_activate_browser_transport() -> None:
+    responses.post("https://example.test/action", body="cf-chl-test", status=403)
+    resolver = FakeBrowserBridgeResolver()
+
+    with pytest.raises(SecurityChallenge):
+        HttpTransport(session=requests.Session(), challenge_resolver=resolver).post(
+            "https://example.test/action", data={"confirm": "1"}
+        )
+
+    assert resolver.calls == 0
+    assert resolver.browser_calls == []
+
+
+@responses.activate
+def test_failed_browser_bridge_does_not_fall_back_to_a_second_resolver_cycle() -> None:
+    responses.get("https://example.test/login/", body="cf-chl-test", status=403)
+    resolver = FakeBrowserBridgeResolver(failed_methods=frozenset({"GET"}))
+
+    with pytest.raises(SecurityChallenge):
+        HttpTransport(session=requests.Session(), challenge_resolver=resolver).get(
+            "https://example.test/login/"
+        )
+
+    assert resolver.calls == 0
+    assert resolver.browser_calls == [("GET", "https://example.test/login/")]
+
+
+@responses.activate
+def test_browser_mode_does_not_replay_a_failed_post() -> None:
+    responses.get("https://example.test/login/", body="cf-chl-test", status=403)
+    resolver = FakeBrowserBridgeResolver(failed_methods=frozenset({"POST"}))
+    transport = HttpTransport(session=requests.Session(), challenge_resolver=resolver)
+
+    transport.get("https://example.test/login/")
+    with pytest.raises(SecurityChallenge):
+        transport.post("https://example.test/login/login", data={"login": "owner"})
+
+    assert resolver.browser_calls == [
+        ("GET", "https://example.test/login/"),
+        ("POST", "https://example.test/login/login"),
+    ]

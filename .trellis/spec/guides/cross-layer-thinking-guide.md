@@ -116,6 +116,10 @@ After implementation:
 - [ ] Tested with edge cases (null, empty, invalid)
 - [ ] Verified error handling at each boundary
 - [ ] Checked data survives round-trip
+- [ ] If a session crosses HTTP stacks (for example browser to `requests`), verified that transport
+      identity—not only cookies and User-Agent—still satisfies the upstream security contract
+- [ ] For side-effecting requests, distinguished "proven not sent" from "possibly sent" and allowed
+      retries only in the former state
 - [ ] Checked that consumers import shared decoders / projections instead of
       casting payload fields locally
 - [ ] Checked that derived state points back to the source event identifier

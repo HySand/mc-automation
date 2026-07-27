@@ -27,8 +27,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED` inherits `AI_SOLVER_ENABLED` instead of disabling the captcha
   solver.
 - MineBBS ESA option: `MINEBBS_ESA_SLIDER_ENABLED` (default `false`) enables up to three independent
-  `CloakBrowser` slide-to-end attempts from DOM geometry. It requires `MINEBBS_ENABLED=true` and does not require or
-  consume AI endpoint, key, model, prompt, or screenshot data.
+  `CloakBrowser` slide-to-end attempts from DOM geometry. After a challenged GET/HEAD succeeds, the
+  MineBBS transport remains on the same-origin Chromium network stack instead of returning to
+  `requests`. It requires `MINEBBS_ENABLED=true` and does not require or consume AI endpoint, key,
+  model, prompt, or screenshot data.
 - `MINEBBS_BROWSER_EXECUTABLE_PATH` remains accepted for backwards-compatible local configuration,
   but the free `cloakbrowser==0.3.32` package downloads and uses its pinned Chromium v146 binary.
 - GitHub Actions installs the optional browser extra and runs `python -m cloakbrowser install`; no
@@ -96,12 +98,14 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   disappeared. Other task ID 1 links, such as `do=apply`, do not mean the completed task remains.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
-- If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium, with
-  at most three independent browser/profile attempts per Action run.
+- If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may activate visible Chromium,
+  with at most three independent browser/profile attempts for that safe request.
   The resolver reads the Alibaba ESA handle/track bounding boxes, moves the handle to the track end
-  with a seeded-testable path shaped from a successful manual sample, synchronizes cookies and User-Agent
-  only after challenge markers disappear, and retries the original GET/HEAD once. POST challenges
-  are never replayed.
+  with a seeded-testable path shaped from a successful manual sample, and accepts the request only
+  after challenge markers disappear. The transport then enters browser mode: later same-origin
+  GET/HEAD/POST requests use Chromium rather than Python HTTP/TLS. GET/HEAD may use up to three fresh
+  browser/profile attempts; POST has exactly one dispatch attempt. Browser failure never falls back
+  to a second resolver cycle, and challenged POST requests are never replayed.
 - WDSJFWQ image CAPTCHAs are handled only inside the WDSJFWQ like form path when
   `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED=true`; the adapter downloads the captcha image with the same
   session, asks the model for strict JSON, validates the code shape, fills a random username, and
@@ -253,8 +257,9 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 
 ### 2. Signatures
 
-- `EsaSliderChallengeResolver(wait_seconds=15.0, drag_steps=120, drag_duration_ms=465, headless=False, browser_executable_path=None, random_source=None)`
+- `EsaSliderChallengeResolver(wait_seconds=15.0, drag_steps=61, drag_duration_ms=465, headless=False, browser_executable_path=None, random_source=None)`
 - `EsaSliderChallengeResolver(max_attempts=3).resolve(url, session, timeout) -> bool`
+- `EsaSliderChallengeResolver.browser_request(method, url, session, timeout, **kwargs) -> requests.Response | None`
 - `EsaSliderChallengeResolver.HANDLE_SELECTOR = "#aliyunCaptcha-sliding-slider"`
 - `EsaSliderChallengeResolver.TRACK_SELECTOR = "#aliyunCaptcha-sliding-wrapper"`
 
@@ -307,6 +312,22 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   coverage; mocks that accept arbitrary strings cannot detect malformed object-literal syntax. Generic
   `安全验证` copy may remain on the normal MineBBS login page, so clearance is structural: no slider in
   any live frame, a non-challenge title, a loaded body, and the expected origin.
+- `HttpTransport` calls `browser_request()` directly for the first challenged GET/HEAD. When it
+  succeeds, `_browser_mode` becomes sticky for that MineBBS transport. The legacy `resolve()` path is
+  used only when the resolver has no browser-request bridge; a failed bridge must not be followed by
+  another three-attempt resolver cycle.
+- The bridge binds its first accepted MineBBS origin. Every later target and final redirect must have
+  the same scheme, host, and effective port. Cross-origin requests or redirects return `None` and the
+  transport raises `SecurityChallenge`.
+- Browser GET/HEAD prepares query parameters with `requests.Request`, navigates with Chromium, and
+  returns a synthetic `requests.Response`; HEAD exposes an empty body. Browser POST first opens the
+  bound origin, then performs one same-origin `fetch()` with `credentials='include'`, the prepared
+  form/JSON body, and only browser-safe request headers. Response status, final URL, exposed headers,
+  and text are copied into the synthetic response; browser cookies and User-Agent are synchronized
+  after successful cleanup.
+- POST is never retried after entering browser mode. Any browser startup, navigation, fetch,
+  classification, session-read, or cleanup failure is treated as an indeterminate single dispatch
+  and stops the site. This prevents duplicate login, purchase, sign-in, and bump submissions.
 
 ### 4. Validation & Error Matrix
 
@@ -317,16 +338,22 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 | Non-positive dimensions or track not wider than handle | Return `False`; no drag |
 | Drag completes but challenge remains | Return `False`; no cookie/User-Agent sync |
 | Browser/profile cleanup fails | Return `False`; no cookie/User-Agent sync |
-| Challenge clears | Sync browser session and retry the original GET/HEAD once |
+| Initial challenged GET/HEAD clears through browser request | Enter sticky same-origin browser mode and return the Chromium response |
+| Browser bridge fails its initial GET/HEAD | Raise `SecurityChallenge`; do not call `resolve()` for another three attempts |
+| Browser-mode GET/HEAD fails | Use at most three fresh profiles, then raise `SecurityChallenge` |
+| Browser-mode POST fails before or after dispatch | Raise `SecurityChallenge` after one attempt; never replay |
+| Browser target or final redirect changes origin | Reject the response and raise `SecurityChallenge` |
 | Challenged POST | Resolver is not invoked; POST is never replayed |
 
 ### 5. Good/Base/Bad Cases
 
 - Good: a 40 px handle on a 360 px track yields a 320 px slide; the challenge clears and session
-  state is synchronized.
+  state is synchronized; login and later MineBBS actions continue through Chromium on the same
+  origin.
 - Base: feature disabled; the detected ESA challenge immediately becomes `manual_intervention`.
-- Bad: send a viewport screenshot to `OpenAICompatibleVisionSolver` or use hard-coded viewport
-  coordinates unrelated to the current DOM geometry.
+- Bad: copy browser cookies back to `requests` and continue MineBBS through Python TLS, retry a
+  browser POST after an unknown outcome, or send a viewport screenshot to
+  `OpenAICompatibleVisionSolver`.
 
 ### 6. Tests Required
 
@@ -340,6 +367,11 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
   endpoint dwell occurs before release.
 - Assert cookies/User-Agent copy only after clear, the browser profile closes on all paths, missing
   geometry is unresolved, and missing `CloakBrowser`/Chromium is unresolved.
+- Assert a challenged GET switches `HttpTransport` to the browser bridge, later GET/HEAD/POST bypass
+  `requests`, and the bridge rejects cross-origin targets and final redirects.
+- Assert a failed initial browser bridge does not invoke the legacy resolver, safe browser methods
+  use at most three attempts, and browser POST invokes exactly one attempt even when cleanup or
+  response classification fails.
 - Assert the resolver-owned temporary profile is removed after both successful startup and failed
   browser launch; no `uc_*` or resolver-prefixed profile is retained by the normal path.
 - Assert configuration/workflow install browser support from `MINEBBS_ESA_SLIDER_ENABLED`, not from
@@ -367,6 +399,23 @@ track = await tab.select(TRACK_SELECTOR)
 handle_box = await handle.get_position()
 track_box = await track.get_position()
 end_x = track_box.x + track_box.width - handle_box.width / 2
+```
+
+#### Wrong: return to Python HTTP after browser clearance
+
+```python
+if resolver.resolve(url, session, timeout):
+    return session.get(url)  # ESA/WAF can reject the Python TLS fingerprint again.
+```
+
+#### Correct: keep the MineBBS request path on Chromium
+
+```python
+response = resolver.browser_request(method, url, session, timeout, **kwargs)
+if response is None:
+    raise SecurityChallenge("browser transport could not complete the request")
+transport._browser_mode = True
+return response
 ```
 
 ### Common Mistake: Fixed per-point waits
@@ -420,9 +469,9 @@ complete allowlisted JSONL diagnostic stream.
 | Enabled site lacks a required key | Redacted `manual_intervention`; perform no network calls |
 | Both sites disabled | `skipped`, exit zero |
 | Challenge in default mode | Raise `SecurityChallenge`; do not retry |
-| GET/HEAD MineBBS ESA challenge with DOM slider enabled | Up to three independent DOM-derived drag attempts, synchronize session after first clear, retry original request once |
+| GET/HEAD MineBBS ESA challenge with DOM slider enabled | Up to three independent DOM-derived browser attempts; after first clear, keep all same-origin MineBBS traffic on Chromium |
 | WDSJFWQ captcha form with AI solver enabled | Download captcha image, require strict JSON code, submit one filled form |
-| Challenged POST or interactive challenge not cleared | Raise `SecurityChallenge`; never replay |
+| Challenged POST, browser-mode POST uncertainty, or interactive challenge not cleared | Raise `SecurityChallenge`; never replay |
 | Repeated challenges across runs | Report each run independently; never persist a suspension marker |
 | Unknown/ambiguous markup or ownership mismatch | Raise `SiteParseError`; no purchase/use submission |
 | Transient timeout or selected GET 5xx | Bounded transport retry; POST is not automatically retried |
@@ -432,8 +481,9 @@ complete allowlisted JSONL diagnostic stream.
 ## Required tests
 
 Tests must cover configuration redaction, disabled-site behavior, challenge detection, three-attempt
-ESA DOM browser retry, WDSJFWQ captcha form filling, strict model JSON parsing, Cookie/User-Agent
-synchronization, challenged POST no-replay, repeated-run challenge handling, cooldown/interval boundaries,
+ESA DOM browser retry, sticky same-origin browser transport, WDSJFWQ captcha form filling, strict
+model JSON parsing, Cookie/User-Agent synchronization, challenged/browser-mode POST no-replay,
+repeated-run challenge handling, cooldown/interval boundaries,
 ownership by authenticated Discuz UID, parser ambiguity, state redaction, cross-site failure isolation, WARP fail-closed
 workflow wiring, and promotion-click proxy isolation. The quality gate is:
 

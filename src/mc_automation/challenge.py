@@ -13,7 +13,7 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
@@ -182,6 +182,7 @@ class EsaSliderChallengeResolver:
         )
         self._random = random_source or random.Random()
         self.max_attempts = max(1, max_attempts)
+        self._browser_origin: str | None = None
 
     def resolve(
         self,
@@ -214,7 +215,323 @@ class EsaSliderChallengeResolver:
                 resolved=False,
             )
             return False
+        return self._resolve_without_running_loop(url, session, timeout)
 
+    def browser_request(
+        self,
+        method: str,
+        url: str,
+        session: requests.Session,
+        timeout: tuple[float, float],
+        **kwargs: Any,
+    ) -> requests.Response | None:
+        """Execute a MineBBS request with Chromium's network stack after a challenged safe GET."""
+
+        current_method = method.upper()
+        if current_method not in {"GET", "HEAD", "POST"}:
+            return None
+        if self._browser_origin is None:
+            self._browser_origin = url
+        elif not self._is_same_origin(url, self._browser_origin):
+            return None
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            return None
+
+        os.environ.setdefault("CLOAKBROWSER_AUTO_UPDATE", "false")
+        try:
+            cloakbrowser = importlib.import_module("cloakbrowser")
+        except ImportError:
+            return None
+        if not hasattr(cloakbrowser, "launch_persistent_context_async"):
+            return None
+
+        attempt_limit = 1 if current_method == "POST" else self.max_attempts
+        log_step(
+            "esa_browser_transport",
+            site="minebbs",
+            status="started",
+            method=current_method,
+            url=url,
+            max_attempts=attempt_limit,
+        )
+        for attempt in range(1, attempt_limit + 1):
+            try:
+                response = asyncio.run(
+                    self._browser_request_cloak_async(
+                        cloakbrowser,
+                        current_method,
+                        url,
+                        session,
+                        timeout,
+                        kwargs,
+                    )
+                )
+            except Exception as exc:
+                log_step(
+                    "esa_browser_transport",
+                    site="minebbs",
+                    status="failed",
+                    method=current_method,
+                    url=url,
+                    attempt=attempt,
+                    max_attempts=attempt_limit,
+                    exception_type=type(exc).__name__,
+                )
+                continue
+            if response is not None:
+                log_step(
+                    "esa_browser_transport",
+                    site="minebbs",
+                    status="completed",
+                    method=current_method,
+                    url=url,
+                    attempt=attempt,
+                    max_attempts=attempt_limit,
+                    status_code=response.status_code,
+                )
+                return response
+        return None
+
+    async def _browser_request_cloak_async(
+        self,
+        cloakbrowser: Any,
+        method: str,
+        url: str,
+        session: requests.Session,
+        timeout: tuple[float, float],
+        request_kwargs: dict[str, Any],
+    ) -> requests.Response | None:
+        context: Any = None
+        profile_path = Path(tempfile.mkdtemp(prefix="mc-automation-esa-browser-request-"))
+        browser_response: requests.Response | None = None
+        browser_session: tuple[list[Any], str] | None = None
+        cleanup_ok = False
+        try:
+            context = await cloakbrowser.launch_persistent_context_async(
+                str(profile_path),
+                headless=self.headless,
+                humanize=True,
+                human_preset="careful",
+            )
+            cookies = self._request_cookies_for_playwright(session, url)
+            if cookies:
+                await context.add_cookies(cookies)
+            page = await context.new_page()
+            if method in {"GET", "HEAD"}:
+                browser_response = await self._browser_get_response(
+                    page,
+                    method,
+                    url,
+                    timeout,
+                    request_kwargs,
+                )
+            else:
+                browser_response = await self._browser_post_response(
+                    page,
+                    method,
+                    url,
+                    timeout,
+                    request_kwargs,
+                )
+            if browser_response is not None:
+                browser_session = await self._read_playwright_session(context, page)
+        finally:
+            if context is not None:
+                try:
+                    await asyncio.wait_for(
+                        context.close(), timeout=self.BROWSER_CLEANUP_TIMEOUT_SECONDS
+                    )
+                except Exception:
+                    cleanup_ok = False
+                else:
+                    cleanup_ok = True
+            else:
+                cleanup_ok = True
+            cleanup_ok = cleanup_ok and await self._remove_managed_profile(profile_path)
+        if browser_response is None or browser_session is None or not cleanup_ok:
+            return None
+        cookies, user_agent = browser_session
+        self._copy_browser_session(cookies, user_agent, session)
+        return browser_response
+
+    async def _browser_get_response(
+        self,
+        page: Any,
+        method: str,
+        url: str,
+        timeout: tuple[float, float],
+        request_kwargs: dict[str, Any],
+    ) -> requests.Response | None:
+        prepared = requests.Request(
+            method,
+            url,
+            params=request_kwargs.get("params"),
+            headers=request_kwargs.get("headers"),
+        ).prepare()
+        prepared_url = str(prepared.url or url)
+        navigation = await page.goto(
+            prepared_url,
+            wait_until="domcontentloaded",
+            timeout=round(max(timeout) * 1000),
+        )
+        await self._settle_playwright_page(page)
+        cleared = await self._page_is_clear(page, expected_url=prepared_url)
+        if not cleared:
+            cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
+                page, expected_url=prepared_url
+            )
+        if not cleared:
+            return None
+        headers = await navigation.all_headers() if navigation is not None else {}
+        status_code = int(navigation.status) if navigation is not None else 200
+        text = "" if method == "HEAD" else await page.content()
+        return self._build_browser_response(
+            method,
+            page.url,
+            status_code,
+            headers,
+            text,
+        )
+
+    async def _browser_post_response(
+        self,
+        page: Any,
+        method: str,
+        url: str,
+        timeout: tuple[float, float],
+        request_kwargs: dict[str, Any],
+    ) -> requests.Response | None:
+        parsed = urlsplit(url)
+        origin = urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
+        await page.goto(
+            origin,
+            wait_until="domcontentloaded",
+            timeout=round(max(timeout) * 1000),
+        )
+        await self._settle_playwright_page(page)
+        cleared = await self._page_is_clear(page, expected_url=origin)
+        if not cleared:
+            cleared = await self._drag_slider_playwright(page) and await self._wait_until_clear(
+                page, expected_url=origin
+            )
+        if not cleared:
+            return None
+
+        prepared = requests.Request(
+            method,
+            url,
+            params=request_kwargs.get("params"),
+            data=request_kwargs.get("data"),
+            json=request_kwargs.get("json"),
+            headers=request_kwargs.get("headers"),
+        ).prepare()
+        blocked_headers = {
+            "accept-encoding",
+            "connection",
+            "content-length",
+            "cookie",
+            "host",
+            "user-agent",
+        }
+        headers = {
+            name: value
+            for name, value in prepared.headers.items()
+            if name.casefold() not in blocked_headers
+        }
+        body = prepared.body
+        if isinstance(body, bytes):
+            body = body.decode("utf-8")
+        payload = {
+            "url": str(prepared.url or url),
+            "method": method,
+            "headers": headers,
+            "body": body,
+        }
+        result = await asyncio.wait_for(
+            page.evaluate(
+                """async payload => {
+                  const init = {
+                    method: payload.method,
+                    headers: payload.headers,
+                    credentials: 'include',
+                    redirect: 'follow'
+                  };
+                  if (payload.body !== null) init.body = payload.body;
+                  const response = await fetch(payload.url, init);
+                  return {
+                    status: response.status,
+                    url: response.url,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    text: await response.text()
+                  };
+                }""",
+                payload,
+            ),
+            timeout=max(timeout),
+        )
+        if not isinstance(result, dict):
+            return None
+        final_url = str(result.get("url", ""))
+        text = str(result.get("text", ""))
+        status_code = int(result.get("status", 0))
+        if not self._is_same_origin(final_url, url) or not self._browser_text_is_clear(
+            status_code, text
+        ):
+            return None
+        result_headers = result.get("headers", {})
+        return self._build_browser_response(
+            method,
+            final_url,
+            status_code,
+            result_headers if isinstance(result_headers, dict) else {},
+            text,
+        )
+
+    @classmethod
+    def _browser_text_is_clear(cls, status_code: int, text: str) -> bool:
+        challenge = detect_security_challenge(status_code, text)
+        if challenge is None:
+            return True
+        if not any(marker.casefold() in challenge.casefold() for marker in cls.CLEAR_PAGE_MARKERS):
+            return False
+        lowered = text.casefold()
+        return not any(
+            marker.casefold() in lowered
+            for marker in (
+                cls.HANDLE_SELECTOR.removeprefix("#"),
+                'id="captcha-element"',
+                "id='captcha-element'",
+                *cls.CHALLENGE_TITLES,
+            )
+        )
+
+    @staticmethod
+    def _build_browser_response(
+        method: str,
+        url: str,
+        status_code: int,
+        headers: dict[str, Any],
+        text: str,
+    ) -> requests.Response:
+        response = requests.Response()
+        response.status_code = status_code
+        response.url = url
+        response.headers.update({str(name): str(value) for name, value in headers.items()})
+        response.encoding = requests.utils.get_encoding_from_headers(response.headers) or "utf-8"
+        response._content = text.encode(response.encoding, errors="replace")
+        response.request = requests.Request(method, url).prepare()
+        return response
+
+    def _resolve_without_running_loop(
+        self,
+        url: str,
+        session: requests.Session,
+        timeout: tuple[float, float],
+    ) -> bool:
         # The pinned free build must not start its background updater. Besides changing
         # reproducibility, that daemon can crash Python during process shutdown on Linux.
         os.environ.setdefault("CLOAKBROWSER_AUTO_UPDATE", "false")

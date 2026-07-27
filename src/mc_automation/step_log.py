@@ -42,6 +42,7 @@ PHASE_LABELS = {
     "security_challenge": "安全验证",
     "challenge_resolution": "验证处理",
     "esa_attempt": "ESA 滑块尝试",
+    "esa_browser_transport": "ESA 浏览器传输",
     "site_action": "站点操作",
     "page_fetch": "读取页面",
     "like_count": "点赞数",
