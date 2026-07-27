@@ -91,4 +91,4 @@ WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只�
 
 运行时还会输出逐步 JSONL 日志，覆盖配置、状态、各站点动作、HTTP、WDSJFWQ 验证码图片下载/AI 识别/表单提交/计数确认，以及 MineBBS ESA 浏览器/DOM/拖动/清理流程。URL 仅保留 scheme、host、port 和 path；日志只记录字段名、状态、数量及耗时，不记录表单值、验证码文本、图片 Base64、AI endpoint/key 或原始响应正文。
 
-普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie、CSRF token 或 Referer，不关闭 TLS 校验，也不跟随重定向。`KLPBBS_PROMOTION_URL` 必须与 `KLPBBS_BASE_URL` 同源。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。
+普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie、CSRF token 或 Referer，不关闭 TLS 校验。Discuz 根推广链接必须经过站内 301 才会计数，因此程序手动跟随最多 3 次严格同源跳转，任何跨域、缺少 `Location` 或超限跳转均拒绝。`KLPBBS_PROMOTION_URL` 必须与 `KLPBBS_BASE_URL` 同源。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。

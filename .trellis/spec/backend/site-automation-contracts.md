@@ -52,8 +52,11 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Only KLPBBS promotion-link clicks use the dynamic HTTP proxy pool. Proxy-source downloads,
   authenticated promotion task operations, and every other site request continue through WARP.
 - A promotion click uses a fresh session with `trust_env=False`, cleared headers/cookies, explicit
-  `http`/`https` proxy arguments, TLS verification enabled, and redirects disabled. The adapter must
-  validate that the exact promotion URL is same-origin before passing it to the visitor.
+  `http`/`https` proxy arguments, and TLS verification enabled. The adapter validates the initial
+  promotion URL before passing it to the visitor. Discuz `index.php` redirects root promotion URLs
+  before `misc_promotion.php` records the source IP, so the visitor manually follows at most three
+  strictly same-origin redirects while keeping `requests` automatic redirects disabled. Missing,
+  cross-origin, or excessive redirects fail that candidate.
 - Free proxy probes use a short `2s` connect and `5s` read timeout. A timeout is an expected failed
   candidate: it consumes that proxy and immediately advances to the next one.
 - KLPBBS promotion uses stable task ID `1`, and the doing-task list is

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -19,6 +19,7 @@ from .transport import TransportError
 DEFAULT_PROXY_LIMIT = 500
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 DEFAULT_PROXY_WORKERS = 20
+MAX_PROMOTION_REDIRECTS = 3
 
 
 class ProxyPoolExhausted(TransportError):
@@ -131,6 +132,18 @@ def normalize_http_proxy(raw: str) -> str | None:
         return None
     host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     return f"http://{host}:{parsed.port}"
+
+
+def _same_origin(first: str, second: str) -> bool:
+    left = urlsplit(first)
+    right = urlsplit(second)
+    left_port = left.port or (443 if left.scheme == "https" else 80)
+    right_port = right.port or (443 if right.scheme == "https" else 80)
+    return (
+        left.scheme.casefold() == right.scheme.casefold()
+        and left.hostname == right.hostname
+        and left_port == right_port
+    )
 
 
 def _proxy_values(payload: bytes, source: ProxySource) -> Iterable[str]:
@@ -296,22 +309,45 @@ class ProxyPromotionVisitor:
             }
         )
         response: requests.Response | None = None
+        current_url = promotion_url
+        redirect_count = 0
         try:
-            response = session.get(
-                promotion_url,
-                proxies={"http": proxy, "https": proxy},
-                timeout=self.timeout,
-                allow_redirects=False,
-                verify=True,
-                stream=True,
+            while True:
+                response = session.get(
+                    current_url,
+                    proxies={"http": proxy, "https": proxy},
+                    timeout=self.timeout,
+                    allow_redirects=False,
+                    verify=True,
+                    stream=True,
+                )
+                if not response.is_redirect:
+                    break
+                location = response.headers.get("Location")
+                next_url = urljoin(current_url, location) if location else ""
+                if (
+                    not next_url
+                    or not _same_origin(promotion_url, next_url)
+                    or redirect_count >= MAX_PROMOTION_REDIRECTS
+                ):
+                    break
+                response.close()
+                response = None
+                current_url = next_url
+                redirect_count += 1
+
+            success = (
+                response is not None
+                and not response.is_redirect
+                and 200 <= response.status_code < 300
             )
-            success = not response.is_redirect and 200 <= response.status_code < 300
             log_step(
                 "promotion_proxy_visit",
                 site="klpbbs",
                 status="completed" if success else "failed",
                 action=attempt,
-                status_code=response.status_code,
+                status_code=response.status_code if response is not None else None,
+                redirect_count=redirect_count,
             )
             return success
         except (ProxyError, RequestsConnectionError, Timeout, SSLError):

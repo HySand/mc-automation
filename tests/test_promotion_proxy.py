@@ -58,8 +58,8 @@ class StubCookies:
 
 
 class VisitSession:
-    def __init__(self, response: StubResponse) -> None:
-        self.response = response
+    def __init__(self, response: StubResponse | list[StubResponse]) -> None:
+        self.responses = response if isinstance(response, list) else [response]
         self.headers: dict[str, str] = {"Cookie": "must-be-cleared"}
         self.cookies = StubCookies()
         self.trust_env = True
@@ -68,7 +68,7 @@ class VisitSession:
 
     def get(self, url: str, **kwargs: Any) -> StubResponse:
         self.calls.append((url, kwargs))
-        return self.response
+        return self.responses.pop(0)
 
     def close(self) -> None:
         self.closed = True
@@ -186,7 +186,13 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
 
 
 def test_proxy_visitor_rejects_redirects_without_following_them() -> None:
-    session = VisitSession(StubResponse(b"", status_code=302))
+    session = VisitSession(
+        StubResponse(
+            b"",
+            status_code=302,
+            headers={"Location": "https://outside.example/landing"},
+        )
+    )
     visitor = ProxyPromotionVisitor(
         StaticPool(("http://8.8.8.8:8080",)),
         session_factory=lambda: session,
@@ -194,6 +200,30 @@ def test_proxy_visitor_rejects_redirects_without_following_them() -> None:
 
     assert not visitor.visit("https://klpbbs.com/promotion?fromuid=5")
     assert session.calls[0][1]["allow_redirects"] is False
+
+
+def test_proxy_visitor_manually_follows_same_origin_promotion_redirect() -> None:
+    session = VisitSession(
+        [
+            StubResponse(
+                b"",
+                status_code=301,
+                headers={"Location": "/forum.php?fromuid=5"},
+            ),
+            StubResponse(b"landing"),
+        ]
+    )
+    visitor = ProxyPromotionVisitor(
+        StaticPool(("http://8.8.8.8:8080",)),
+        session_factory=lambda: session,
+    )
+
+    assert visitor.visit("https://klpbbs.com/?fromuid=5")
+    assert [call[0] for call in session.calls] == [
+        "https://klpbbs.com/?fromuid=5",
+        "https://klpbbs.com/forum.php?fromuid=5",
+    ]
+    assert all(call[1]["allow_redirects"] is False for call in session.calls)
 
 
 def test_proxy_visitor_processes_one_concurrent_batch_and_reports_exhaustion() -> None:
