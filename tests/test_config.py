@@ -12,7 +12,7 @@ def test_sites_are_disabled_by_default() -> None:
     config = AppConfig.from_env({})
     assert not config.klpbbs.enabled
     assert not config.minebbs.enabled
-    assert config.rank_threshold == 10
+    assert config.rank_threshold == 8
     assert config.minebbs_bump_interval_hours == 16
     assert not config.minebbs_esa_slider_enabled
     assert config.minebbs_browser_executable_path is None
@@ -123,14 +123,11 @@ def test_ai_solver_configuration_does_not_change_site_configuration() -> None:
             "KLPBBS_PROMOTION_ENABLED": "true",
             "KLPBBS_PROMOTION_MAX_VISITS": "4",
             "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS": "0.5",
-            "KLPBBS_PROMOTION_PROXY_TARGET_URL": "https://93.184.216.34",
-            "KLPBBS_PROMOTION_TARGET_MARKER": "crackme-marker",
         }
     )
     assert config.klpbbs.base_url == "https://klpbbs.com"
     assert config.klpbbs.promotion_max_visits == 4
     assert config.klpbbs.promotion_visit_delay_seconds == 0.5
-    assert config.klpbbs.promotion_proxy_target_url == "https://93.184.216.34"
     assert config.ai_solver.enabled
     assert config.ai_solver.endpoint == "https://ai.example.test/v1"
     assert config.ai_solver.model == "vision-model"
@@ -189,20 +186,18 @@ def test_ai_solver_requires_secret_configuration_without_echoing_values() -> Non
     assert "private-ai.example.test" not in str(error.value)
 
 
-def test_promotion_proxy_requires_an_isolated_public_ip_target() -> None:
-    base = {
-        "KLPBBS_ENABLED": "true",
-        "KLPBBS_USERNAME": "u",
-        "KLPBBS_PASSWORD": "p",
-        "KLPBBS_THREAD_ID": "12",
-        "KLPBBS_PROMOTION_ENABLED": "true",
-        "KLPBBS_PROMOTION_TARGET_MARKER": "crackme-marker",
-    }
-    with pytest.raises(ConfigurationError, match="KLPBBS_PROMOTION_PROXY_TARGET_URL"):
-        AppConfig.from_env(base)
+def test_promotion_only_requires_klpbbs_configuration() -> None:
+    config = AppConfig.from_env(
+        {
+            "KLPBBS_ENABLED": "true",
+            "KLPBBS_USERNAME": "u",
+            "KLPBBS_PASSWORD": "p",
+            "KLPBBS_THREAD_ID": "12",
+            "KLPBBS_PROMOTION_ENABLED": "true",
+        }
+    )
 
-    with pytest.raises(ConfigurationError, match="IP 字面量"):
-        AppConfig.from_env({**base, "KLPBBS_PROMOTION_PROXY_TARGET_URL": "https://klpbbs.com"})
+    assert config.klpbbs.promotion_enabled
 
 
 def test_minebbs_bump_interval_must_be_positive() -> None:
@@ -232,3 +227,13 @@ def test_browser_extra_and_workflow_use_nodriver() -> None:
     assert legacy_browser_command not in workflow.casefold()
     assert "MINEBBS_ESA_SLIDER_ENABLED" in workflow
     assert "MINEBBS_BROWSER_EXECUTABLE_PATH" in workflow
+
+
+def test_workflow_enforces_warp_and_keeps_promotion_proxy_configuration_separate() -> None:
+    root = Path(__file__).parents[1]
+    workflow = (root / ".github" / "workflows" / "automation.yml").read_text(encoding="utf-8")
+
+    assert "viperadnan-git/setup-warp@691f6aa5a251ed89ea27a85e890f6f5313c1a3b5" in workflow
+    assert "^warp=(on|plus)$" in workflow
+    assert "KLPBBS_PROMOTION_PROXY_TARGET_URL" not in workflow
+    assert "KLPBBS_PROMOTION_TARGET_MARKER" not in workflow

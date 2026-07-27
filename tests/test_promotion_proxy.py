@@ -3,18 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
 import requests
 
 from mc_automation.promotion_proxy import (
-    TARGET_MARKER_HEADER,
     DynamicProxyPool,
-    IsolatedPromotionTarget,
     ProxyPromotionVisitor,
     ProxySource,
     normalize_http_proxy,
 )
-from mc_automation.transport import UnsafeTarget
 
 
 @dataclass
@@ -119,23 +115,10 @@ def test_dynamic_pool_isolates_source_failures_and_deduplicates_candidates() -> 
     assert not session.trust_env
 
 
-def test_isolated_target_requires_public_ip_and_preserves_only_path_and_query() -> None:
-    with pytest.raises(UnsafeTarget, match="IP 字面量"):
-        IsolatedPromotionTarget("https://klpbbs.com", "crackme-marker")
-    with pytest.raises(UnsafeTarget, match="公网 IP"):
-        IsolatedPromotionTarget("https://192.168.1.2", "crackme-marker")
-
-    target = IsolatedPromotionTarget("https://93.184.216.34", "crackme-marker")
-    assert (
-        target.map_promotion_url("https://klpbbs.com/promotion?fromuid=5#ignored")
-        == "https://93.184.216.34/promotion?fromuid=5"
-    )
-
-
 def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> None:
     queued_sessions = [
-        VisitSession(StubResponse(b"", headers={TARGET_MARKER_HEADER: "crackme-marker"})),
-        VisitSession(StubResponse(b"", headers={TARGET_MARKER_HEADER: "crackme-marker"})),
+        VisitSession(StubResponse(b"")),
+        VisitSession(StubResponse(b"")),
     ]
     created_sessions: list[VisitSession] = []
 
@@ -145,7 +128,6 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
         return session
 
     visitor = ProxyPromotionVisitor(
-        IsolatedPromotionTarget("https://93.184.216.34", "crackme-marker"),
         StaticPool(("http://8.8.8.8:8080", "http://1.1.1.1:80")),
         session_factory=session_factory,
     )
@@ -155,8 +137,8 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
 
     first, second = created_sessions
     assert [call[0] for call in first.calls + second.calls] == [
-        "https://93.184.216.34/promotion?fromuid=5",
-        "https://93.184.216.34/promotion?fromuid=5",
+        "https://klpbbs.com/promotion?fromuid=5",
+        "https://klpbbs.com/promotion?fromuid=5",
     ]
     assert first.calls[0][1]["proxies"] == {
         "http": "http://8.8.8.8:8080",
@@ -176,13 +158,12 @@ def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> No
     assert all(call[1]["verify"] is True for session in created_sessions for call in session.calls)
 
 
-def test_proxy_visitor_stops_when_a_success_response_lacks_the_target_marker() -> None:
-    session = VisitSession(StubResponse(b"landing"))
+def test_proxy_visitor_rejects_redirects_without_following_them() -> None:
+    session = VisitSession(StubResponse(b"", status_code=302))
     visitor = ProxyPromotionVisitor(
-        IsolatedPromotionTarget("http://93.184.216.34", "crackme-marker"),
         StaticPool(("http://8.8.8.8:8080",)),
         session_factory=lambda: session,
     )
 
-    with pytest.raises(UnsafeTarget, match="靶场标记"):
-        visitor.visit("https://klpbbs.com/promotion?fromuid=5")
+    assert not visitor.visit("https://klpbbs.com/promotion?fromuid=5")
+    assert session.calls[0][1]["allow_redirects"] is False

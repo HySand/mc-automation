@@ -96,8 +96,8 @@ def test_first_run_never_spends() -> None:
     assert "purchase_bump_item" not in adapter.calls
 
 
-def test_rank_in_top_ten_skips() -> None:
-    adapter = FakeAdapter(rank=10)
+def test_rank_at_threshold_skips() -> None:
+    adapter = FakeAdapter(rank=8)
     report = Orchestrator([adapter], AppState(recovered=True), now=NOW).run()
     assert report.results[-1].action == "eligibility"
     assert "get_inventory" not in adapter.calls

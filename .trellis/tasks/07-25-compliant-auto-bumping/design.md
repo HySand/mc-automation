@@ -123,10 +123,10 @@ GitHub schedule/manual trigger
   transport retries the original GET/HEAD once. Missing geometry, invalid dimensions, unavailable
   `nodriver`/Chromium, failed verification, and all challenged POST requests remain `manual_intervention`.
 - Promotion authentication, task apply/status, and reward draw continue through the guarded authenticated transport.
-- Promotion visits use a separate session with no cookies, credentials, CSRF tokens, environment proxies, or authenticated Referer. The visitor fetches bounded candidate lists from the six sources used by the reference project, isolates source failures, validates public IP-literal HTTP proxy endpoints, deduplicates them, and consumes each endpoint once.
-- The task-provided path/query is mapped onto `KLPBBS_PROMOTION_PROXY_TARGET_URL`, which must be an HTTP(S) root URL whose host is a globally routable IP literal. Therefore an HTTP proxy or HTTPS CONNECT request never performs DNS resolution for `klpbbs.com`.
-- A proxied response counts only when it is a non-redirect 2xx response whose `X-MC-Automation-Target` header exactly matches `KLPBBS_PROMOTION_TARGET_MARKER`. A mismatch raises an unsafe-target failure and stops the promotion flow.
-- Proxy attempts are sequential, capped by configuration, delayed between attempts, and retain normal TLS certificate verification. Only successful marked visits trigger a fresh authenticated task-status check.
+- The GitHub Actions job establishes a system-level Cloudflare WARP full tunnel before dependency installation and verifies `warp=on`; failure aborts the job instead of using the runner's original egress.
+- Promotion visits use a separate session with no cookies, credentials, CSRF tokens, environment proxies, or authenticated Referer. The visitor fetches bounded candidate lists from the reference sources through WARP, isolates source failures, validates public IP-literal HTTP proxy endpoints, deduplicates them, and consumes each endpoint once.
+- After the KLPBBS adapter validates the discovered promotion URL against its configured origin, the visitor sends that exact URL through the selected HTTP proxy. The authenticated task transport never uses the dynamic proxy pool.
+- Proxy attempts are sequential, capped by configuration, delayed between attempts, reject redirects, and retain normal TLS certificate verification. Only successful 2xx visits trigger a fresh authenticated task-status check.
 
 ## Site-Specific Design
 

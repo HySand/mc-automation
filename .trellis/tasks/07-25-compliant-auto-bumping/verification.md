@@ -19,14 +19,16 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | State and redaction | State schema contains only operational fields; exact-value scan found no configured credentials or AI endpoint/key outside `.env` | Pass |
 | Workflow and dependency wiring | `uv lock --check`, CLI dry-run, and Workflow YAML parsing | Pass |
 | Complete step logging | JSONL logs cover CLI, orchestration, HTTP, WDSJFWQ AI/form/count confirmation, and ESA browser/DOM/drag/session stages; sentinel secrets, captcha text, image data, form values, raw bodies, and URL query values are absent | Pass |
+| WARP and promotion routing | Actions pins WARP setup to commit `691f6aa5a251ed89ea27a85e890f6f5313c1a3b5`, requires Cloudflare trace `warp=on`/`warp=plus`, and fails before application execution otherwise. Only the final same-origin KLPBBS promotion click uses a fresh `trust_env=False` session with an explicit dynamic HTTP proxy | Pass in workflow and unit contract tests; live Actions run pending push |
+| Marker removal and rank policy | Obsolete promotion target/marker fields are absent from runtime configuration and workflow; local/GitHub promotion switch is enabled and `RANK_THRESHOLD=8` | Pass |
 
 Final gate:
 
 ```text
-ruff format --check .: pass (36 files)
+ruff format --check .: pass (34 files)
 ruff check .: pass
-mypy src: pass (17 source files)
-pytest --cov=mc_automation: 121 passed, 85% total coverage
+mypy src: pass (18 source files)
+pytest --cov=mc_automation: 126 passed, 85% total coverage
 uv lock --check: pass
 Workflow YAML parse: pass
 secret scan: 0 matches

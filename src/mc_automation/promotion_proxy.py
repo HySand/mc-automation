@@ -6,15 +6,14 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal, Protocol
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import ProxyError, SSLError, Timeout
 
-from .transport import TransportError, UnsafeTarget
+from .transport import TransportError
 
-TARGET_MARKER_HEADER = "X-MC-Automation-Target"
 DEFAULT_PROXY_LIMIT = 500
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 
@@ -231,48 +230,14 @@ class DynamicProxyPool:
         return self._loaded
 
 
-@dataclass(frozen=True, slots=True)
-class IsolatedPromotionTarget:
-    base_url: str
-    marker: str
-
-    def __post_init__(self) -> None:
-        parsed = urlsplit(self.base_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise UnsafeTarget("推广代理目标必须是 HTTP(S) 根地址")
-        if parsed.username or parsed.password or parsed.path not in {"", "/"}:
-            raise UnsafeTarget("推广代理目标不能包含凭据或路径")
-        if parsed.query or parsed.fragment:
-            raise UnsafeTarget("推广代理目标不能包含查询参数或片段")
-        try:
-            address = ipaddress.ip_address(parsed.hostname)
-        except ValueError as exc:
-            raise UnsafeTarget("推广代理目标必须使用 IP 字面量，不能使用域名") from exc
-        if not address.is_global:
-            raise UnsafeTarget("推广代理目标必须是公共代理可达的公网 IP")
-        if not self.marker or len(self.marker) > 128 or any(char in self.marker for char in "\r\n"):
-            raise UnsafeTarget("推广靶场响应标记必须为 1 至 128 个无换行字符")
-
-    def map_promotion_url(self, promotion_url: str) -> str:
-        promotion = urlsplit(promotion_url)
-        if promotion.scheme not in {"http", "https"} or not promotion.hostname:
-            raise UnsafeTarget("任务提供的推广链接不是有效的 HTTP(S) 地址")
-        target = urlsplit(self.base_url)
-        return urlunsplit(
-            (target.scheme, target.netloc, promotion.path or "/", promotion.query, "")
-        )
-
-
 class ProxyPromotionVisitor:
     def __init__(
         self,
-        target: IsolatedPromotionTarget,
         pool: ProxyPool,
         *,
         session_factory: Callable[[], requests.Session] = requests.Session,
         timeout: tuple[float, float] = (5.0, 10.0),
     ) -> None:
-        self.target = target
         self.pool = pool
         self.session_factory = session_factory
         self.timeout = timeout
@@ -289,7 +254,6 @@ class ProxyPromotionVisitor:
         return proxy
 
     def visit(self, promotion_url: str) -> bool:
-        target_url = self.target.map_promotion_url(promotion_url)
         proxy = self._next_proxy()
         session = self.session_factory()
         session.trust_env = False
@@ -297,14 +261,14 @@ class ProxyPromotionVisitor:
         session.headers.clear()
         session.headers.update(
             {
-                "User-Agent": "mc-automation/0.1 isolated-promotion-client",
+                "User-Agent": "mc-automation/0.1 promotion-proxy-client",
                 "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
             }
         )
         response: requests.Response | None = None
         try:
             response = session.get(
-                target_url,
+                promotion_url,
                 proxies={"http": proxy, "https": proxy},
                 timeout=self.timeout,
                 allow_redirects=False,
@@ -312,12 +276,8 @@ class ProxyPromotionVisitor:
                 stream=True,
             )
             if response.is_redirect:
-                raise UnsafeTarget("推广靶场返回重定向，已拒绝继续访问")
-            if not 200 <= response.status_code < 300:
                 return False
-            if response.headers.get(TARGET_MARKER_HEADER) != self.target.marker:
-                raise UnsafeTarget("推广响应缺少预期靶场标记，已停止代理访问")
-            return True
+            return 200 <= response.status_code < 300
         except (ProxyError, RequestsConnectionError, Timeout, SSLError):
             return False
         finally:

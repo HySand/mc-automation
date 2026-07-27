@@ -299,7 +299,7 @@ def test_promotion_task_rejects_unknown_markup_without_visiting() -> None:
     assert len(transport.calls) == 1
 
 
-def test_promotion_task_requires_an_isolated_proxy_visitor() -> None:
+def test_promotion_task_requires_a_proxy_visitor() -> None:
     task_url = "https://example.test/home.php?mod=task"
     transport = FakeTransport(
         {
@@ -332,6 +332,6 @@ def test_promotion_task_rejects_a_link_that_leaves_the_klpbbs_origin() -> None:
         promotion_visitor=visitor,
     )
 
-    with pytest.raises(SiteParseError, match="不属于当前靶场源"):
+    with pytest.raises(SiteParseError, match="不属于当前站点源"):
         adapter.run_promotion_task()
     assert not visitor.urls

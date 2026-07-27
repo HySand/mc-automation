@@ -16,7 +16,7 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   once to the positive numeric ID before adapters run. Wrong hosts and non-thread paths fail closed.
 - The local CLI loads `.env` without overriding already exported environment variables. CI remains
   environment-only because no `.env` file is checked in.
-- Policy: `RANK_THRESHOLD` (default `10`), `PAID_BUMP_COOLDOWN_SECONDS` (default `3600`),
+- Policy: `RANK_THRESHOLD` (default `8`), `PAID_BUMP_COOLDOWN_SECONDS` (default `3600`),
   `MINEBBS_BUMP_INTERVAL_HOURS` (default `16`).
 - Runtime paths: `STATE_PATH` and `GITHUB_STEP_SUMMARY`.
 - AI solver option: `AI_SOLVER_ENABLED` (default `false`) controls only the WDSJFWQ image captcha
@@ -36,11 +36,22 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   not a second ESA challenge attempt; if no fallback exists, the resolver returns `False`.
 - Site base URLs remain explicit configuration. There is no host allowlist, DNS-address restriction,
   bypass header, proxy-based WAF bypass, or public/private routing switch.
+- KLPBBS promotion needs only `KLPBBS_PROMOTION_ENABLED`, `KLPBBS_PROMOTION_MAX_VISITS`, and
+  `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS`; the obsolete proxy-target URL and marker keys must not be
+  restored.
 
 ## Transport and challenge behavior
 
 - KLPBBS uses an authenticated `cloudscraper.CloudScraper`; other sites use `requests.Session`.
   Both run through `HttpTransport` with explicit timeouts and the same fail-closed challenge checks.
+- GitHub Actions establishes a system-level Cloudflare WARP full tunnel before dependency setup and
+  requires Cloudflare trace to report `warp=on` or `warp=plus`. Setup or verification failure aborts
+  the job; ordinary application traffic never falls back to the runner's original egress.
+- Only KLPBBS promotion-link clicks use the dynamic HTTP proxy pool. Proxy-source downloads,
+  authenticated promotion task operations, and every other site request continue through WARP.
+- A promotion click uses a fresh session with `trust_env=False`, cleared headers/cookies, explicit
+  `http`/`https` proxy arguments, TLS verification enabled, and redirects disabled. The adapter must
+  validate that the exact promotion URL is same-origin before passing it to the visitor.
 - Challenge markers, HTTP 401/403/429, CAPTCHA, WAF, and access-denied pages raise
   `SecurityChallenge` and stop that site's side effects.
 - If `MINEBBS_ESA_SLIDER_ENABLED=true`, only a GET/HEAD challenge may invoke visible Chromium once.
@@ -346,7 +357,7 @@ without cookie values, browser profile paths, or page bodies.
 | Three consecutive challenges | Persist a 24-hour suspension |
 | Unknown/ambiguous markup or ownership mismatch | Raise `SiteParseError`; no purchase/use submission |
 | Transient timeout or selected GET 5xx | Bounded transport retry; POST is not automatically retried |
-| KLPBBS rank at or above threshold | `skipped`; do not query inventory or spend |
+| KLPBBS rank at or below threshold | `skipped`; do not query inventory or spend |
 | MineBBS interval has not elapsed | `skipped`; do not query rank, inventory, or balances |
 
 ## Required tests
@@ -354,7 +365,8 @@ without cookie values, browser profile paths, or page bodies.
 Tests must cover configuration redaction, disabled-site behavior, challenge detection, one-shot
 ESA DOM browser retry, WDSJFWQ captcha form filling, strict model JSON parsing, Cookie/User-Agent
 synchronization, challenged POST no-replay, challenge accumulation, cooldown/interval boundaries,
-ownership and parser ambiguity, state redaction, and cross-site failure isolation. The quality gate is:
+ownership and parser ambiguity, state redaction, cross-site failure isolation, WARP fail-closed
+workflow wiring, and promotion-click proxy isolation. The quality gate is:
 
 ```text
 ruff format --check .

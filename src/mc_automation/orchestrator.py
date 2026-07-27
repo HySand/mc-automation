@@ -19,7 +19,7 @@ class Orchestrator:
         adapters: list[SiteAdapter | OneShotAdapter],
         state: AppState,
         *,
-        rank_threshold: int = 10,
+        rank_threshold: int = 8,
         paid_cooldown_seconds: int = 3600,
         bump_intervals_seconds: Mapping[str, int] | None = None,
         now: datetime | None = None,

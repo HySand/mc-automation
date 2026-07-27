@@ -13,7 +13,7 @@ from .challenge import EsaSliderChallengeResolver
 from .config import AppConfig, ConfigurationError
 from .models import ActionResult, ActionStatus, RunReport
 from .orchestrator import Orchestrator
-from .promotion_proxy import DynamicProxyPool, IsolatedPromotionTarget, ProxyPromotionVisitor
+from .promotion_proxy import DynamicProxyPool, ProxyPromotionVisitor
 from .security import redact
 from .sites.base import OneShotAdapter, SiteAdapter
 from .sites.klpbbs import KLPBBSAdapter
@@ -146,11 +146,7 @@ def run(argv: list[str] | None = None) -> int:
     if config.klpbbs.enabled:
         promotion_visitor = None
         if config.klpbbs.promotion_enabled:
-            target = IsolatedPromotionTarget(
-                config.klpbbs.promotion_proxy_target_url,
-                config.klpbbs.promotion_target_marker,
-            )
-            promotion_visitor = ProxyPromotionVisitor(target, DynamicProxyPool())
+            promotion_visitor = ProxyPromotionVisitor(DynamicProxyPool())
         adapters.append(
             KLPBBSAdapter(
                 config.klpbbs,

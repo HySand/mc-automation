@@ -8,8 +8,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .ai_solver import AISolverConfig
-from .promotion_proxy import IsolatedPromotionTarget
-from .transport import UnsafeTarget
 
 
 class ConfigurationError(ValueError):
@@ -152,8 +150,6 @@ class SiteConfig:
     promotion_enabled: bool = False
     promotion_max_visits: int = 10
     promotion_visit_delay_seconds: float = 2.0
-    promotion_proxy_target_url: str = ""
-    promotion_target_marker: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,27 +222,6 @@ class AppConfig:
             url = _base_url(source.get(variable, default_url), variable)
             return LikeSiteConfig(name=name, enabled=True, url=url)
 
-        promotion_target_url = ""
-        promotion_target_marker = ""
-        if promotion_enabled:
-            promotion_values = _required(
-                source,
-                (
-                    "KLPBBS_PROMOTION_PROXY_TARGET_URL",
-                    "KLPBBS_PROMOTION_TARGET_MARKER",
-                ),
-                "KLPBBS 推广代理",
-            )
-            promotion_target_url = _base_url(
-                promotion_values["KLPBBS_PROMOTION_PROXY_TARGET_URL"],
-                "KLPBBS_PROMOTION_PROXY_TARGET_URL",
-            )
-            promotion_target_marker = promotion_values["KLPBBS_PROMOTION_TARGET_MARKER"]
-            try:
-                IsolatedPromotionTarget(promotion_target_url, promotion_target_marker)
-            except UnsafeTarget as exc:
-                raise ConfigurationError(str(exc)) from exc
-
         klp = SiteConfig(name="klpbbs", enabled=False)
         if klp_enabled:
             values = _required(
@@ -275,8 +250,6 @@ class AppConfig:
                 promotion_visit_delay_seconds=_minimum_float(
                     source, "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS", 2.0, 0.5
                 ),
-                promotion_proxy_target_url=promotion_target_url,
-                promotion_target_marker=promotion_target_marker,
             )
 
         mine = SiteConfig(name="minebbs", enabled=False)
@@ -324,7 +297,7 @@ class AppConfig:
             mclists=mclists,
             state_path=Path(source.get("STATE_PATH", ".state/state.json")),
             summary_path=Path(summary_raw) if summary_raw else None,
-            rank_threshold=_positive_int(source, "RANK_THRESHOLD", 10),
+            rank_threshold=_positive_int(source, "RANK_THRESHOLD", 8),
             paid_bump_cooldown_seconds=_positive_int(source, "PAID_BUMP_COOLDOWN_SECONDS", 3600),
             minebbs_bump_interval_hours=_positive_int(source, "MINEBBS_BUMP_INTERVAL_HOURS", 16),
             minebbs_esa_slider_enabled=minebbs_esa_slider_enabled,

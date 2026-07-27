@@ -149,7 +149,7 @@ class KLPBBSAdapter:
         if self.promotion_visitor is None:
             raise SiteParseError("KLPBBS 推广任务已启用但代理访问器未配置")
         if not self._is_same_origin(task.visit_url):
-            raise SiteParseError("KLPBBS 推广链接不属于当前靶场源")
+            raise SiteParseError("KLPBBS 推广链接不属于当前站点源")
 
         successful_visits = 0
         for attempts in range(1, self.config.promotion_max_visits + 1):

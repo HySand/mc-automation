@@ -25,8 +25,6 @@ jobs:
       KLPBBS_PROMOTION_ENABLED: ${{ vars.KLPBBS_PROMOTION_ENABLED || 'false' }}
       KLPBBS_PROMOTION_MAX_VISITS: ${{ vars.KLPBBS_PROMOTION_MAX_VISITS || '10' }}
       KLPBBS_PROMOTION_VISIT_DELAY_SECONDS: ${{ vars.KLPBBS_PROMOTION_VISIT_DELAY_SECONDS || '2' }}
-      KLPBBS_PROMOTION_PROXY_TARGET_URL: ${{ vars.KLPBBS_PROMOTION_PROXY_TARGET_URL }}
-      KLPBBS_PROMOTION_TARGET_MARKER: ${{ vars.KLPBBS_PROMOTION_TARGET_MARKER }}
       MINEBBS_ENABLED: ${{ vars.MINEBBS_ENABLED || 'false' }}
       MINEBBS_USERNAME: ${{ secrets.MINEBBS_USERNAME }}
       MINEBBS_PASSWORD: ${{ secrets.MINEBBS_PASSWORD }}
@@ -46,12 +44,28 @@ jobs:
       WDSJFWQ_LIKE_URL: ${{ vars.WDSJFWQ_LIKE_URL || 'https://www.wdsjfwq.com/server-1991/vote.html' }}
       MCLISTS_ENABLED: ${{ vars.MCLISTS_ENABLED || 'false' }}
       MCLISTS_LIKE_URL: ${{ vars.MCLISTS_LIKE_URL || 'https://www.mclists.cn/server/9969.html' }}
-      RANK_THRESHOLD: ${{ vars.RANK_THRESHOLD || '10' }}
+      RANK_THRESHOLD: ${{ vars.RANK_THRESHOLD || '8' }}
       PAID_BUMP_COOLDOWN_SECONDS: ${{ vars.PAID_BUMP_COOLDOWN_SECONDS || '3600' }}
       STATE_PATH: .state/state.json
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Route application traffic through Cloudflare WARP
+        uses: viperadnan-git/setup-warp@691f6aa5a251ed89ea27a85e890f6f5313c1a3b5
+        with:
+          mode: client
+          stack: dual
+          retries: "3"
+          configure_docker: "false"
+
+      - name: Verify Cloudflare WARP egress
+        shell: bash
+        run: |
+          set -euo pipefail
+          trace="$(curl --fail --silent --show-error --max-time 15 --retry 2 https://cloudflare.com/cdn-cgi/trace)"
+          grep -Eq '^warp=(on|plus)$' <<< "$trace"
+          grep -E '^(warp|loc)=' <<< "$trace"
 
       - uses: actions/setup-python@v5
         with:

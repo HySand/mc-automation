@@ -134,13 +134,14 @@ python -m pytest tests/test_klpbbs.py tests/test_orchestrator.py
 - [x] Test that MineBBS skips before 16 hours, runs at 16 hours without requesting rank, and KLPBBS still uses rank eligibility.
 - [x] Update README, workflow variables, code-spec, and verification evidence.
 
-## 11. Isolated dynamic proxy promotion
+## 11. Dynamic proxy promotion with WARP-separated traffic
 
-- [ ] Add an explicit public IP-literal promotion target and response-marker configuration; reject domains, credentials, non-root paths, non-global addresses, and missing markers.
-- [ ] Implement the reference project's six dynamic HTTP proxy sources with bounded reads/timeouts, source failure isolation, strict public IP/port parsing, deterministic deduplication, and a candidate cap.
-- [ ] Add a cookie-free promotion visitor that maps only the discovered path/query to the isolated target, uses each proxy once, keeps TLS verification enabled, rejects redirects, and requires the target marker.
-- [ ] Integrate the visitor into KLPBBS promotion while keeping apply/status/draw on the authenticated private transport; recheck status only after successful marked visits.
-- [ ] Update workflow/environment documentation, backend contracts, and tests for source parsing/failure isolation, configuration rejection, target mapping, marker failure, single-use proxies, cap behavior, and credential separation.
+- [x] Implement the reference project's dynamic HTTP proxy sources with bounded reads/timeouts, source failure isolation, strict public IP/port parsing, deterministic deduplication, and a candidate cap.
+- [x] Add a cookie-free promotion visitor that directly visits the adapter-validated same-origin URL, uses each proxy once, keeps TLS verification enabled, and rejects redirects.
+- [x] Integrate the visitor into KLPBBS promotion while keeping apply/status/draw on the authenticated WARP transport; recheck status only after successful visits.
+- [x] Remove obsolete proxy-target and marker configuration from code, workflow, templates, documentation, and tests.
+- [x] Establish and verify a fail-closed Cloudflare WARP full tunnel in Actions for all traffic except explicitly proxied promotion clicks.
+- [x] Update backend contracts and complete tests for WARP enforcement, direct promotion URL use, single-use proxies, TLS, redirects, and credential separation.
 
 Validation:
 

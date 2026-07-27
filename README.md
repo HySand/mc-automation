@@ -1,15 +1,17 @@
 # mc-automation
 
-面向 KLPBBS 与 MineBBS 的规则感知型 Minecraft 服务器宣传顶贴自动化。程序只执行站点公开提供的签到、资源查询和官方顶贴道具流程，不发送论坛回复，不刷量、不刷评分，也不通过代理池绕过站点限制。
+面向 KLPBBS 与 MineBBS 的规则感知型 Minecraft 服务器宣传顶贴自动化。程序执行站点提供的签到、资源查询、官方顶贴道具和 KLPBBS 推广任务流程，不发送论坛回复或刷评分。
 
 ## 工作方式
 
-- GitHub Actions 每小时检查两个站点，也支持 `workflow_dispatch` 手动运行。
-- KLPBBS 只有跌出前 10 名后才会使用官方顶贴道具。
+- GitHub Actions 每小时检查所有启用站点，也支持 `workflow_dispatch` 手动运行。
+- GitHub Actions 建立系统级 Cloudflare WARP 全隧道路由并检查 `warp=on`；WARP 建立或检查失败时终止任务。
+- KLPBBS 只有排名大于阈值（默认 `8`）后才会使用官方顶贴道具。
 - MineBBS 不使用排名作为门槛，两次成功顶贴默认间隔 16 小时。
 - 每个站点每轮最多完成一次购买/使用事务；状态丢失时先保守地执行登录、签到和读取检查。
 - 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点立即停止并报告 `manual_intervention`；连续三次挑战会暂停 24 小时。
 - KLPBBS 使用独立的 `cloudscraper` 会话；其他站点继续使用普通 `requests` 会话，所有响应仍经过统一挑战检测。
+- KLPBBS 推广任务使用动态 HTTP 代理池直接点击站点校验过的同源推广链接；只有这些点击绕过 WARP 路由选择并显式使用代理，代理源下载、任务申请、状态检查和领奖仍走 WARP。
 - MineBBS ESA 滑块可选使用 `nodriver` 读取滑块与轨道的 DOM 几何信息，并通过 CDP 鼠标事件拖到末端；不截图、不调用 AI。WDSJFWQ 图片验证码仍可独立启用 OpenAI-compatible 视觉模型。
 
 ## 配置
@@ -33,7 +35,10 @@
 |---|---:|---|
 | `KLPBBS_ENABLED` | `false` | 启用 KLPBBS 适配器 |
 | `MINEBBS_ENABLED` | `false` | 启用 MineBBS 适配器 |
-| `RANK_THRESHOLD` | `10` | KLPBBS 排名门槛 |
+| `RANK_THRESHOLD` | `8` | KLPBBS 排名门槛；排名大于该值时尝试顶贴 |
+| `KLPBBS_PROMOTION_ENABLED` | `false` | 启用 KLPBBS 官方推广任务 |
+| `KLPBBS_PROMOTION_MAX_VISITS` | `10` | 每轮推广代理点击上限 |
+| `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS` | `2` | 串行代理点击间隔，最低 `0.5` 秒 |
 | `PAID_BUMP_COOLDOWN_SECONDS` | `3600` | KLPBBS 付费顶贴冷却 |
 | `MINEBBS_BUMP_INTERVAL_HOURS` | `16` | MineBBS 顶贴间隔 |
 | `MINEBBS_ESA_SLIDER_ENABLED` | `false` | 启用基于 `nodriver` DOM 几何的 MineBBS ESA 非 AI 滑块处理 |
@@ -85,3 +90,5 @@ WDSJFWQ 会下载当前会话里的 `captcha.png`，用模型提示词要求只�
 适配器遇到未知 HTML、所有权不匹配、余额/库存/CSRF 不明确或站点拒绝时，不执行购买、使用或顶贴副作用。运行结果写入 Actions 日志和 Job Summary，但不会包含凭据、Cookie、响应正文或扩展密钥。
 
 运行时还会输出逐步 JSONL 日志，覆盖配置、状态、各站点动作、HTTP、WDSJFWQ 验证码图片下载/AI 识别/表单提交/计数确认，以及 MineBBS ESA 浏览器/DOM/拖动/清理流程。URL 仅保留 scheme、host、port 和 path；日志只记录字段名、状态、数量及耗时，不记录表单值、验证码文本、图片 Base64、AI endpoint/key 或原始响应正文。
+
+普通连接依赖 GitHub Actions 中的系统级 WARP 全隧道路由，不使用应用层 `HTTP_PROXY`/`HTTPS_PROXY`。KLPBBS 推广点击则使用独立的无凭据 Session，设置 `trust_env=False` 并显式传入动态代理；不携带登录 Cookie、CSRF token 或 Referer，不关闭 TLS 校验，也不跟随重定向。旧配置 `KLPBBS_PROMOTION_PROXY_TARGET_URL` 和 `KLPBBS_PROMOTION_TARGET_MARKER` 已删除。
