@@ -126,7 +126,10 @@ GitHub schedule/manual trigger
 - The GitHub Actions job establishes a system-level Cloudflare WARP full tunnel before dependency installation and verifies `warp=on`; failure aborts the job instead of using the runner's original egress.
 - Promotion visits use a separate session with no cookies, credentials, CSRF tokens, environment proxies, or authenticated Referer. The visitor fetches bounded candidate lists from the reference sources through WARP, isolates source failures, validates public IP-literal HTTP proxy endpoints, deduplicates them, and consumes each endpoint once.
 - After the KLPBBS adapter validates the discovered promotion URL against its configured origin, the visitor sends that exact URL through the selected HTTP proxy. The authenticated task transport never uses the dynamic proxy pool.
-- Proxy attempts are sequential, capped by configuration, delayed between attempts, reject redirects, and retain normal TLS certificate verification. Only successful 2xx visits trigger a fresh authenticated task-status check.
+- Proxy attempts are sequential, delayed between attempts, reject redirects, and retain normal TLS
+  certificate verification. Failed proxies are skipped until the pool is exhausted. A successful
+  2xx response is not progress; it only triggers a fresh authenticated read of Discuz `#csc_1`.
+  Completion is based on server progress, not request count.
 
 ## Site-Specific Design
 
@@ -137,7 +140,9 @@ GitHub schedule/manual trigger
 - Rank is parsed from forum 56 normal-thread IDs; absent/ambiguous targets produce a safe failure unless the page conclusively proves the target is beyond the first page.
 - No forum reply method or reply-text configuration exists.
 - Official `bump` magic inventory, purchase, and application forms are parsed/submitted with current `formhash`; no forum-reply path is implemented.
-- The adapter discovers the official promotion task from server HTML, applies it when available, follows only the task-provided guarded promotion URL, rechecks progress after each bounded visit, and draws the reward only from an unambiguous server-provided action.
+- The adapter discovers the official promotion task from server HTML, applies it when available,
+  follows only the guarded promotion URL, rechecks authoritative task progress after candidate
+  visits, and draws only after the server reports 100% or an explicit completed state.
 
 ### MineBBS
 

@@ -11,7 +11,7 @@
 - 每个站点每轮最多完成一次购买/使用事务；状态丢失时先保守地执行登录、签到和读取检查。
 - 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点立即停止并报告 `manual_intervention`；连续三次挑战会暂停 24 小时。
 - KLPBBS 使用独立的 `cloudscraper` 会话；其他站点继续使用普通 `requests` 会话，所有响应仍经过统一挑战检测。
-- KLPBBS 推广任务使用动态 HTTP 代理池直接点击站点校验过的同源推广链接；只有这些点击绕过 WARP 路由选择并显式使用代理，代理源下载、任务申请、状态检查和领奖仍走 WARP。
+- KLPBBS 推广任务使用动态 HTTP 代理池直接点击站点校验过的同源推广链接；代理失败时继续换用下一个，HTTP 成功不等于任务进度。程序以任务页 `#csc_1` 的实际百分比为准，直到完成领奖或代理池耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。
 - MineBBS ESA 滑块可选使用 `nodriver` 读取滑块与轨道的 DOM 几何信息，并通过 CDP 鼠标事件拖到末端；不截图、不调用 AI。WDSJFWQ 图片验证码仍可独立启用 OpenAI-compatible 视觉模型。
 
 ## 配置
@@ -38,7 +38,6 @@
 | `RANK_THRESHOLD` | `8` | KLPBBS 排名门槛；排名大于该值时尝试顶贴 |
 | `KLPBBS_PROMOTION_ENABLED` | `false` | 启用 KLPBBS 官方推广任务 |
 | `KLPBBS_PROMOTION_URL` | 空 | KLPBBS 账号的同源推广链接，例如 `https://klpbbs.com/?fromuid=123456`；启用推广时必填 |
-| `KLPBBS_PROMOTION_MAX_VISITS` | `10` | 每轮推广代理点击上限 |
 | `KLPBBS_PROMOTION_VISIT_DELAY_SECONDS` | `2` | 串行代理点击间隔，最低 `0.5` 秒 |
 | `PAID_BUMP_COOLDOWN_SECONDS` | `3600` | KLPBBS 付费顶贴冷却 |
 | `MINEBBS_BUMP_INTERVAL_HOURS` | `16` | MineBBS 顶贴间隔 |

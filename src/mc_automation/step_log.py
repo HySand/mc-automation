@@ -59,6 +59,10 @@ ALLOWED_METADATA_KEYS = frozenset(
         "normal_thread_count",
         "owned",
         "path_points",
+        "progress_changed",
+        "progress_percent",
+        "proxy_count",
+        "proxy_successes",
         "rank",
         "recovered",
         "redirect_count",
@@ -71,15 +75,16 @@ ALLOWED_METADATA_KEYS = frozenset(
         "result_count",
         "result_status",
         "session_synced",
+        "source_name",
         "state_exists",
         "status_code",
         "submit_method",
+        "subject_link_count",
         "success_marker",
         "suspended",
         "threshold",
         "track_width",
         "url",
-        "visits",
     }
 )
 

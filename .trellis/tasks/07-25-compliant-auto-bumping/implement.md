@@ -111,8 +111,8 @@ python -m pytest tests/test_config.py tests/test_transport.py tests/test_securit
 
 - [x] Extend the adapter contract and orchestrator with an optional promotion-task step after sign-in.
 - [x] Discover apply/draw/progress/promotion controls from authenticated server HTML without a hard-coded task ID.
-- [x] Visit promotion links serially with a configured cap and delay; recheck after each visit and draw only after conclusive completion.
-- [x] Add tests for available, already doing, incomplete, complete/draw, unknown markup, challenge, and visit cap behavior.
+- [x] Visit promotion links serially with a delay; continue failed proxies until pool exhaustion and draw only after conclusive server progress.
+- [x] Add tests for available, already doing, incomplete, complete/draw, unknown markup, challenge, progress parsing, and pool exhaustion.
 
 Validation:
 

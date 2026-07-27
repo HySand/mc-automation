@@ -122,12 +122,11 @@ def test_ai_solver_configuration_does_not_change_site_configuration() -> None:
             "KLPBBS_THREAD_ID": "12",
             "KLPBBS_PROMOTION_ENABLED": "true",
             "KLPBBS_PROMOTION_URL": "https://klpbbs.com/?fromuid=5",
-            "KLPBBS_PROMOTION_MAX_VISITS": "4",
             "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS": "0.5",
         }
     )
     assert config.klpbbs.base_url == "https://klpbbs.com"
-    assert config.klpbbs.promotion_max_visits == 4
+    assert not hasattr(config.klpbbs, "promotion_max_visits")
     assert config.klpbbs.promotion_visit_delay_seconds == 0.5
     assert config.ai_solver.enabled
     assert config.ai_solver.endpoint == "https://ai.example.test/v1"

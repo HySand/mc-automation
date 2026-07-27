@@ -7,6 +7,7 @@ import pytest
 
 from mc_automation.config import SiteConfig
 from mc_automation.models import ActionStatus
+from mc_automation.promotion_proxy import ProxyPoolExhausted
 from mc_automation.sites.base import SiteParseError
 from mc_automation.sites.klpbbs import KLPBBSAdapter
 
@@ -43,6 +44,8 @@ class FakePromotionVisitor:
 
     def visit(self, promotion_url: str) -> bool:
         self.urls.append(promotion_url)
+        if not self.outcomes:
+            raise ProxyPoolExhausted("test pool exhausted")
         return self.outcomes.pop(0)
 
 
@@ -56,11 +59,10 @@ def config() -> SiteConfig:
     )
 
 
-def promotion_config(*, max_visits: int = 3) -> SiteConfig:
+def promotion_config() -> SiteConfig:
     return replace(
         config(),
         promotion_enabled=True,
-        promotion_max_visits=max_visits,
         promotion_visit_delay_seconds=0,
     )
 
@@ -153,6 +155,26 @@ def test_rank_falls_back_to_discuz_subject_links_when_row_ids_are_absent() -> No
     assert site.get_thread_rank() == 2
 
 
+def test_rank_subject_link_fallback_excludes_sticky_threads() -> None:
+    forum_url = "https://example.test/forum-56-1.html"
+    html = """
+        <table id="threadlisttableid">
+          <tbody id="stickthread_9"><tr><th>
+            <a class="xst" href="thread-9-1-1.html">S</a>
+          </th></tr></tbody>
+          <tbody><tr><th><a class="xst" href="thread-7-1-1.html">A</a></th></tr></tbody>
+          <tbody><tr><th><a class="xst" href="thread-42-1-1.html">B</a></th></tr></tbody>
+        </table>
+    """
+    site = KLPBBSAdapter(
+        config(),
+        FakeTransport({forum_url: html}),
+        base_url="https://example.test",
+    )
+
+    assert site.get_thread_rank() == 2
+
+
 def test_inventory_distinguishes_explicitly_empty_from_unparseable() -> None:
     inventory_url = "https://example.test/home.php?mod=magic&action=mybox"
     empty = KLPBBSAdapter(
@@ -216,7 +238,7 @@ def test_purchase_reports_insufficient_resources_without_retrying() -> None:
     assert len([call for call in transport.calls if call[0] == "POST"]) == 1
 
 
-def test_promotion_task_applies_visits_and_draws_reward() -> None:
+def test_promotion_task_applies_candidate_visits_and_draws_reward() -> None:
     task_url = "https://example.test/home.php?mod=task"
     apply_url = "https://example.test/home.php?mod=task&do=apply&id=7"
     doing_url = "https://example.test/home.php?mod=task&item=doing"
@@ -254,7 +276,7 @@ def test_promotion_task_applies_visits_and_draws_reward() -> None:
     result = adapter.run_promotion_task()
 
     assert result.status is ActionStatus.SUCCESS
-    assert result.metadata["visits"] == 1
+    assert result.metadata["proxy_successes"] == 1
     assert result.metadata["attempts"] == 1
     assert visitor.urls == [visit_url]
     assert [call[1] for call in transport.calls] == [
@@ -266,7 +288,116 @@ def test_promotion_task_applies_visits_and_draws_reward() -> None:
     ]
 
 
-def test_promotion_task_stops_at_configured_visit_cap() -> None:
+def test_promotion_task_uses_server_progress_instead_of_http_success() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    visit_url = "https://example.test/promotion?fromuid=5"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+
+    def progress(value: int) -> str:
+        return (
+            '<div class="task">推广任务 进行中 '
+            f'<span id="csc_1">{value}.00</span>'
+            '<a href="home.php?mod=task&do=draw&id=1">领取奖励</a>'
+            f'<a href="{visit_url}">推广链接</a></div>'
+        )
+
+    transport = FakeTransport(
+        {
+            task_url: progress(20),
+            doing_url: [progress(20), progress(100)],
+            draw_url: "领取奖励成功",
+        }
+    )
+    visitor = FakePromotionVisitor([True, False, True])
+    adapter = KLPBBSAdapter(
+        promotion_config(),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert result.metadata == {"proxy_successes": 2, "attempts": 3}
+    assert visitor.urls == [visit_url, visit_url, visit_url]
+
+
+def test_promotion_task_does_not_draw_when_incomplete_draw_link_exists() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    visit_url = "https://example.test/promotion?fromuid=5"
+    incomplete = (
+        '<div class="task">推广任务 进行中 任务完成 <span id="csc_1">25.00</span>%'
+        '<a href="home.php?mod=task&do=draw&id=1">领取奖励</a>'
+        f'<a href="{visit_url}">推广链接</a></div>'
+    )
+    visitor = FakePromotionVisitor([True])
+    transport = FakeTransport({task_url: incomplete, doing_url: incomplete})
+    adapter = KLPBBSAdapter(
+        promotion_config(),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SKIPPED
+    assert result.metadata == {
+        "attempts": 1,
+        "proxy_successes": 1,
+        "progress_percent": 25,
+    }
+    assert draw_url_not_called(transport.calls)
+
+
+def draw_url_not_called(calls: list[tuple[str, str, dict[str, Any]]]) -> bool:
+    return not any("do=draw" in url for _, url, _ in calls)
+
+
+def test_promotion_task_detects_completion_on_final_pool_check() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    visit_url = "https://example.test/promotion?fromuid=5"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+    initial = (
+        '<div class="task">推广任务 进行中 <span id="csc_1">0</span>'
+        f'<a href="{visit_url}">推广链接</a></div>'
+    )
+    complete = (
+        '<div class="task">推广任务 进行中 <span id="csc_1">100.00</span>'
+        '<a href="home.php?mod=task&do=draw&id=1">领取奖励</a></div>'
+    )
+    transport = FakeTransport(
+        {
+            task_url: initial,
+            doing_url: [initial, complete],
+            draw_url: "领取奖励成功",
+        }
+    )
+    visitor = FakePromotionVisitor([True])
+    adapter = KLPBBSAdapter(
+        promotion_config(),
+        transport,
+        base_url="https://example.test",
+        promotion_visitor=visitor,
+    )
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert result.metadata == {"proxy_successes": 1, "attempts": 1}
+    assert [call[1] for call in transport.calls] == [
+        task_url,
+        doing_url,
+        doing_url,
+        draw_url,
+    ]
+
+
+def test_promotion_task_continues_failed_proxies_until_pool_exhaustion() -> None:
     task_url = "https://example.test/home.php?mod=task"
     doing_url = "https://example.test/home.php?mod=task&item=doing"
     visit_url = "https://example.test/promotion?fromuid=5"
@@ -276,13 +407,12 @@ def test_promotion_task_stops_at_configured_visit_cap() -> None:
     transport = FakeTransport(
         {
             task_url: incomplete,
-            doing_url: [incomplete, incomplete],
-            visit_url: ["landing", "landing"],
+            doing_url: incomplete,
         }
     )
     visitor = FakePromotionVisitor([False, False])
     adapter = KLPBBSAdapter(
-        promotion_config(max_visits=2),
+        promotion_config(),
         transport,
         base_url="https://example.test",
         promotion_visitor=visitor,
@@ -291,12 +421,12 @@ def test_promotion_task_stops_at_configured_visit_cap() -> None:
     result = adapter.run_promotion_task()
 
     assert result.status is ActionStatus.SKIPPED
-    assert result.metadata == {"visits": 0, "attempts": 2}
-    assert visitor.urls == [visit_url, visit_url]
-    assert [call[1] for call in transport.calls] == [task_url]
+    assert result.metadata == {"attempts": 2, "proxy_successes": 0}
+    assert visitor.urls == [visit_url, visit_url, visit_url]
+    assert [call[1] for call in transport.calls] == [task_url, doing_url]
 
 
-def test_promotion_task_draws_already_completed_reward_without_visits() -> None:
+def test_promotion_task_draws_already_completed_reward_without_proxy_requests() -> None:
     task_url = "https://example.test/home.php?mod=task"
     draw_url = "https://example.test/home.php?mod=task&do=draw&id=7"
     transport = FakeTransport(
@@ -313,7 +443,7 @@ def test_promotion_task_draws_already_completed_reward_without_visits() -> None:
     result = adapter.run_promotion_task()
 
     assert result.status is ActionStatus.SUCCESS
-    assert result.metadata["visits"] == 0
+    assert result.metadata["proxy_successes"] == 0
     assert len(transport.calls) == 2
 
 
@@ -385,6 +515,7 @@ def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
             task_url: "<html>incomplete task center</html>",
             apply_url: "任务申请成功",
             doing_url: [
+                '<span id="csc_1">100.00</span>'
                 '<a href="home.php?mod=task&do=draw&id=1">领取奖励</a>',
             ],
             draw_url: "请注意查收",
@@ -431,7 +562,7 @@ def test_promotion_confirms_opaque_draw_by_rechecking_doing_tasks() -> None:
     result = adapter.run_promotion_task()
 
     assert result.status is ActionStatus.SUCCESS
-    assert result.metadata["visits"] == 0
+    assert result.metadata["proxy_successes"] == 0
     assert [call[1] for call in transport.calls] == [task_url, draw_url, doing_url]
 
 

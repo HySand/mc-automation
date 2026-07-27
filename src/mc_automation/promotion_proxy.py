@@ -12,6 +12,7 @@ import requests
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import ProxyError, SSLError, Timeout
 
+from .step_log import log_step
 from .transport import TransportError
 
 DEFAULT_PROXY_LIMIT = 500
@@ -179,6 +180,7 @@ class DynamicProxyPool:
         candidate_limit: int = DEFAULT_PROXY_LIMIT,
         source_timeout: tuple[float, float] = (5.0, 15.0),
         source_max_bytes: int = DEFAULT_SOURCE_MAX_BYTES,
+        per_source_limit: int = 100,
     ) -> None:
         self.sources = tuple(default_proxy_sources() if sources is None else sources)
         self.session = session or requests.Session()
@@ -187,6 +189,7 @@ class DynamicProxyPool:
         self.candidate_limit = candidate_limit
         self.source_timeout = source_timeout
         self.source_max_bytes = source_max_bytes
+        self.per_source_limit = per_source_limit
         self._loaded: tuple[str, ...] | None = None
 
     def load(self) -> tuple[str, ...]:
@@ -195,6 +198,7 @@ class DynamicProxyPool:
 
         unique: dict[str, None] = {}
         for source in self.sources:
+            source_added = 0
             try:
                 response = self.session.get(
                     source.url,
@@ -210,8 +214,10 @@ class DynamicProxyPool:
                 for raw_proxy in _proxy_values(payload, source):
                     proxy = normalize_http_proxy(raw_proxy)
                     if proxy is not None:
+                        before = len(unique)
                         unique.setdefault(proxy, None)
-                    if len(unique) >= self.candidate_limit:
+                        source_added += len(unique) - before
+                    if len(unique) >= self.candidate_limit or source_added >= self.per_source_limit:
                         break
             except (
                 requests.RequestException,
@@ -220,7 +226,21 @@ class DynamicProxyPool:
                 TypeError,
                 AttributeError,
             ):
+                log_step(
+                    "promotion_proxy_source",
+                    site="klpbbs",
+                    status="failed",
+                    source_name=source.name,
+                    proxy_count=source_added,
+                )
                 continue
+            log_step(
+                "promotion_proxy_source",
+                site="klpbbs",
+                status="completed",
+                source_name=source.name,
+                proxy_count=source_added,
+            )
             if len(unique) >= self.candidate_limit:
                 break
 
@@ -275,10 +295,22 @@ class ProxyPromotionVisitor:
                 verify=True,
                 stream=True,
             )
-            if response.is_redirect:
-                return False
-            return 200 <= response.status_code < 300
+            success = not response.is_redirect and 200 <= response.status_code < 300
+            log_step(
+                "promotion_proxy_visit",
+                site="klpbbs",
+                status="completed" if success else "failed",
+                action=self._next_index,
+                status_code=response.status_code,
+            )
+            return success
         except (ProxyError, RequestsConnectionError, Timeout, SSLError):
+            log_step(
+                "promotion_proxy_visit",
+                site="klpbbs",
+                status="failed",
+                action=self._next_index,
+            )
             return False
         finally:
             if response is not None:

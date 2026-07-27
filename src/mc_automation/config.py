@@ -164,7 +164,6 @@ class SiteConfig:
     base_url: str = ""
     promotion_enabled: bool = False
     promotion_url: str = ""
-    promotion_max_visits: int = 10
     promotion_visit_delay_seconds: float = 2.0
 
 
@@ -274,9 +273,6 @@ class AppConfig:
                 base_url=klp_base_url,
                 promotion_enabled=promotion_enabled,
                 promotion_url=promotion_url,
-                promotion_max_visits=_bounded_positive_int(
-                    source, "KLPBBS_PROMOTION_MAX_VISITS", 10, 100
-                ),
                 promotion_visit_delay_seconds=_minimum_float(
                     source, "KLPBBS_PROMOTION_VISIT_DELAY_SECONDS", 2.0, 0.5
                 ),

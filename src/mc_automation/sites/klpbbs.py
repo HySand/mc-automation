@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup, Tag
 
 from ..config import SiteConfig
 from ..models import ActionResult, ActionStatus, Inventory, Resources
-from ..promotion_proxy import PromotionVisitor
+from ..promotion_proxy import PromotionVisitor, ProxyPoolExhausted
 from ..step_log import log_step
 from ..transport import HttpTransport
 from .base import SiteParseError
@@ -21,6 +21,7 @@ class _PromotionTask:
     draw_url: str | None = None
     visit_url: str | None = None
     complete: bool = False
+    progress_percent: float | None = None
 
 
 class KLPBBSAdapter:
@@ -50,6 +51,24 @@ class KLPBBSAdapter:
         query = parse_qs(urlsplit(href).query)
         return query.get("mod") == ["task"] and query.get("do") == [action]
 
+    @staticmethod
+    def _task_id(href: str) -> str | None:
+        values = parse_qs(urlsplit(href).query).get("id")
+        return values[0] if values and values[0].isdigit() else None
+
+    @staticmethod
+    def _task_progress(scope: Tag | BeautifulSoup, task_id: str | None) -> float | None:
+        progress_node = scope.select_one(f"#csc_{task_id}") if task_id else None
+        if progress_node is None:
+            progress_node = scope.select_one('[id^="csc_"]')
+        if progress_node is None:
+            return None
+        match = re.search(r"(\d+(?:\.\d+)?)", progress_node.get_text(" ", strip=True))
+        if match is None:
+            return None
+        progress = float(match.group(1))
+        return progress if 0 <= progress <= 100 else None
+
     def _promotion_task(self, html: str) -> _PromotionTask | None:
         soup = BeautifulSoup(html, "html.parser")
         page_text = soup.get_text(" ", strip=True)
@@ -69,6 +88,7 @@ class KLPBBSAdapter:
                 if parse_qs(urlsplit(str(anchor.get("href", ""))).query).get("id") == ["1"]
             ]
             if task_one:
+                fallback_task_id = self._task_id(str(task_one[0].get("href", "")))
                 task_apply_url = next(
                     (
                         self._url(str(anchor["href"]))
@@ -85,11 +105,13 @@ class KLPBBSAdapter:
                     ),
                     None,
                 )
+                progress = self._task_progress(soup, fallback_task_id)
                 return _PromotionTask(
                     apply_url=task_apply_url,
                     draw_url=task_draw_url,
                     visit_url=self.config.promotion_url or None,
-                    complete=task_draw_url is not None,
+                    complete=progress is not None and progress >= 100,
+                    progress_percent=progress,
                 )
             if any(marker in page_text for marker in ("暂无可用任务", "没有可用任务", "暂无任务")):
                 return None
@@ -100,16 +122,21 @@ class KLPBBSAdapter:
         apply_url: str | None = None
         draw_url: str | None = None
         visit_url: str | None = None
+        task_id: str | None = None
         for anchor in scope.select("a[href]"):
             href = str(anchor["href"])
+            task_id = task_id or self._task_id(href)
             if self._task_action(href, "apply"):
                 apply_url = self._url(href)
             elif self._task_action(href, "draw"):
                 draw_url = self._url(href)
             elif "fromuid=" in href or "ac=promotion" in href or "promotion" in href.casefold():
                 visit_url = self._url(href)
-        complete = draw_url is not None or any(
-            marker in text for marker in ("已完成", "任务完成", "可以领取")
+        progress = self._task_progress(scope, task_id)
+        complete = (
+            progress >= 100
+            if progress is not None
+            else any(marker in text for marker in ("已完成", "可以领取"))
         )
         if not any(
             (
@@ -122,14 +149,14 @@ class KLPBBSAdapter:
             )
         ):
             raise SiteParseError("KLPBBS 推广任务状态无法识别")
-        return _PromotionTask(apply_url, draw_url, visit_url, complete)
+        return _PromotionTask(apply_url, draw_url, visit_url, complete, progress)
 
     def _load_promotion_task(self, path: str = "home.php?mod=task") -> _PromotionTask | None:
         page = self.transport.get(self._url(path))
         return self._promotion_task(page.text)
 
     def _draw_promotion_reward(
-        self, draw_url: str, visits: int, *, attempts: int | None = None
+        self, draw_url: str, proxy_successes: int, *, attempts: int | None = None
     ) -> ActionResult:
         response = self.transport.get(draw_url)
         if any(
@@ -142,15 +169,17 @@ class KLPBBSAdapter:
                 "succeed",
             )
         ):
-            metadata: dict[str, str | int | bool | None] = {"visits": visits}
+            confirmed_metadata: dict[str, str | int | bool | None] = {
+                "proxy_successes": proxy_successes
+            }
             if attempts is not None:
-                metadata["attempts"] = attempts
+                confirmed_metadata["attempts"] = attempts
             return ActionResult(
                 self.name,
                 "promotion_task",
                 ActionStatus.SUCCESS,
                 "推广任务已完成并领取奖励",
-                metadata=metadata,
+                metadata=confirmed_metadata,
             )
         doing_page = self.transport.get(self._url("home.php?mod=task&item=doing"))
         doing_soup = BeautifulSoup(doing_page.text, "html.parser")
@@ -160,7 +189,7 @@ class KLPBBSAdapter:
             for anchor in doing_soup.select('a[href*="mod=task"][href*="id=1"]')
         )
         if not draw_link_remains:
-            metadata = {"visits": visits}
+            metadata: dict[str, str | int | bool | None] = {"proxy_successes": proxy_successes}
             if attempts is not None:
                 metadata["attempts"] = attempts
             return ActionResult(
@@ -200,7 +229,7 @@ class KLPBBSAdapter:
                     "推广任务不可申请且不在进行中列表",
                 )
 
-        if task.draw_url is not None:
+        if task.complete and task.draw_url is not None:
             return self._draw_promotion_reward(task.draw_url, 0)
         if task.complete:
             return self._result(
@@ -212,6 +241,7 @@ class KLPBBSAdapter:
                 task.draw_url,
                 self.config.promotion_url or None,
                 task.complete,
+                task.progress_percent,
             )
         if task.visit_url is None:
             raise SiteParseError("KLPBBS 推广任务进行中但缺少 KLPBBS_PROMOTION_URL")
@@ -220,40 +250,86 @@ class KLPBBSAdapter:
         if not self._is_same_origin(task.visit_url):
             raise SiteParseError("KLPBBS 推广链接不属于当前站点源")
 
-        successful_visits = 0
-        for attempts in range(1, self.config.promotion_max_visits + 1):
-            if not self.promotion_visitor.visit(task.visit_url):
-                if attempts < self.config.promotion_max_visits:
-                    time.sleep(self.config.promotion_visit_delay_seconds)
+        attempts = 0
+        proxy_successes = 0
+        previous_progress = task.progress_percent
+        while True:
+            try:
+                proxy_succeeded = self.promotion_visitor.visit(task.visit_url)
+            except ProxyPoolExhausted as exc:
+                task = self._load_promotion_task("home.php?mod=task&item=doing")
+                if task is None:
+                    raise SiteParseError("KLPBBS 推广代理耗尽后任务状态消失") from exc
+                previous_progress = task.progress_percent
+                if task.complete and task.draw_url is not None:
+                    return self._draw_promotion_reward(
+                        task.draw_url, proxy_successes, attempts=attempts
+                    )
+                if task.complete:
+                    metadata: dict[str, str | int | bool | None] = {
+                        "attempts": attempts,
+                        "proxy_successes": proxy_successes,
+                    }
+                    if task.progress_percent is not None:
+                        metadata["progress_percent"] = round(task.progress_percent)
+                    return ActionResult(
+                        self.name,
+                        "promotion_task",
+                        ActionStatus.SUCCESS,
+                        "推广任务已完成，页面未提供额外领奖动作",
+                        metadata=metadata,
+                    )
+                metadata = {
+                    "attempts": attempts,
+                    "proxy_successes": proxy_successes,
+                }
+                if previous_progress is not None:
+                    metadata["progress_percent"] = round(previous_progress)
+                return ActionResult(
+                    self.name,
+                    "promotion_task",
+                    ActionStatus.SKIPPED,
+                    "动态代理池已耗尽，推广任务尚未完成",
+                    metadata=metadata,
+                )
+
+            attempts += 1
+            proxy_successes += int(proxy_succeeded)
+            if not proxy_succeeded:
+                time.sleep(self.config.promotion_visit_delay_seconds)
                 continue
-            successful_visits += 1
             task = self._load_promotion_task("home.php?mod=task&item=doing")
             if task is None:
                 raise SiteParseError("KLPBBS 推广访问后任务状态消失")
-            if task.draw_url is not None:
+            log_step(
+                "promotion_task_progress",
+                site=self.name,
+                status="completed",
+                attempts=attempts,
+                proxy_successes=proxy_successes,
+                progress_percent=task.progress_percent,
+                progress_changed=task.progress_percent != previous_progress,
+            )
+            previous_progress = task.progress_percent
+            if task.complete and task.draw_url is not None:
                 return self._draw_promotion_reward(
-                    task.draw_url, successful_visits, attempts=attempts
+                    task.draw_url, proxy_successes, attempts=attempts
                 )
             if task.complete:
+                completion_metadata: dict[str, str | int | bool | None] = {
+                    "attempts": attempts,
+                    "proxy_successes": proxy_successes,
+                }
+                if task.progress_percent is not None:
+                    completion_metadata["progress_percent"] = round(task.progress_percent)
                 return ActionResult(
                     self.name,
                     "promotion_task",
                     ActionStatus.SUCCESS,
                     "推广任务已完成，页面未提供额外领奖动作",
-                    metadata={"visits": successful_visits, "attempts": attempts},
+                    metadata=completion_metadata,
                 )
-            if attempts < self.config.promotion_max_visits:
-                time.sleep(self.config.promotion_visit_delay_seconds)
-        return ActionResult(
-            self.name,
-            "promotion_task",
-            ActionStatus.SKIPPED,
-            "推广访问已达到本轮上限，任务尚未完成",
-            metadata={
-                "visits": successful_visits,
-                "attempts": self.config.promotion_max_visits,
-            },
-        )
+            time.sleep(self.config.promotion_visit_delay_seconds)
 
     def _url(self, path: str) -> str:
         return urljoin(f"{self.base_url}/", path)
@@ -341,22 +417,31 @@ class KLPBBSAdapter:
                 for node in soup.select('[id^="normalthread_"]')
                 if (match := re.fullmatch(r"normalthread_(\d+)", str(node.get("id", ""))))
             ]
+            subject_links = list(soup.select("#threadlisttableid a.xst[href]"))
             if not ids:
-                ids = [
-                    match.group(1)
-                    for node in soup.select("#threadlisttableid th.new a.xst[href]")
-                    if (
-                        match := re.search(
-                            r"(?:thread-|[?&]tid=)(\d+)(?:-|(?:&|$))",
-                            str(node.get("href", "")),
+                for node in subject_links:
+                    row = node.find_parent(
+                        lambda parent: (
+                            isinstance(parent, Tag)
+                            and str(parent.get("id", "")).startswith(
+                                ("stickthread_", "normalthread_")
+                            )
                         )
                     )
-                ]
+                    if row is not None and str(row.get("id", "")).startswith("stickthread_"):
+                        continue
+                    match = re.search(
+                        r"(?:thread-|[?&]tid=)(\d+)(?:-|(?:&|$))",
+                        str(node.get("href", "")),
+                    )
+                    if match is not None:
+                        ids.append(match.group(1))
             log_step(
                 "rank_page_parse",
                 site=self.name,
                 status="completed" if ids else "incomplete",
                 normal_thread_count=len(ids),
+                subject_link_count=len(subject_links),
             )
             if ids:
                 break

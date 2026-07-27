@@ -212,7 +212,8 @@ class Orchestrator:
                 status="completed",
                 result_status=promotion.status,
                 attempts=promotion.metadata.get("attempts"),
-                visits=promotion.metadata.get("visits"),
+                proxy_successes=promotion.metadata.get("proxy_successes"),
+                progress_percent=promotion.metadata.get("progress_percent"),
             )
             if promotion.status in {
                 ActionStatus.MANUAL_INTERVENTION,

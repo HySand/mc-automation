@@ -115,6 +115,29 @@ def test_dynamic_pool_isolates_source_failures_and_deduplicates_candidates() -> 
     assert not session.trust_env
 
 
+def test_dynamic_pool_caps_each_source_to_preserve_source_diversity() -> None:
+    first_url = "https://source.invalid/first"
+    second_url = "https://source.invalid/second"
+    session = SourceSession(
+        {
+            first_url: StubResponse(b"8.8.8.8:80\n1.1.1.1:80\n9.9.9.9:80\n"),
+            second_url: StubResponse(b"208.67.222.222:80\n"),
+        }
+    )
+    pool = DynamicProxyPool(
+        sources=(ProxySource("first", first_url), ProxySource("second", second_url)),
+        session=session,
+        candidate_limit=3,
+        per_source_limit=2,
+    )
+
+    assert pool.load() == (
+        "http://8.8.8.8:80",
+        "http://1.1.1.1:80",
+        "http://208.67.222.222:80",
+    )
+
+
 def test_proxy_visitor_uses_each_proxy_once_without_cookies_or_redirects() -> None:
     queued_sessions = [
         VisitSession(StubResponse(b"")),
