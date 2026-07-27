@@ -233,7 +233,8 @@ python -m pytest --cov=mc_automation --cov-report=term-missing
   without logging titles, bodies, credentials, cookies, or URL query values.
 - [x] Prevent a Cloudflare Turnstile Frame from being mistaken for a clear page when no ESA DOM exists.
 - [x] Allow one DOM-derived click on a unique visible Turnstile checkbox/label with a bounded Bezier
-  approach; keep missing/ambiguous controls and all challenged POST paths fail-closed.
+  approach, with an exact child-Frame body fallback for closed shadow DOM; keep spoofed hosts,
+  missing/ambiguous geometry, and all challenged POST paths fail-closed.
 - [x] Add regressions for managed-challenge markers, Frame detection, URL redaction, and click ordering.
 
 ## 14. Complete redacted step logging

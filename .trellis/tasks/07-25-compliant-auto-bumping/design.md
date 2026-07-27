@@ -124,7 +124,9 @@ GitHub schedule/manual trigger
   public probe proved that preserving the pre-press approach history clears the same challenge.
 - A Runner may receive a Cloudflare managed-challenge Turnstile frame instead of ESA. The browser
   treats that Frame as unresolved until one unique visible standard checkbox/label can be approached
-  with a bounded Bezier pointer path and clicked once; missing or ambiguous controls are never guessed.
+  with a bounded Bezier pointer path and clicked once. Closed-shadow widgets may instead use only the
+  unique body geometry of an exact `challenges.cloudflare.com/.../turnstile/...` child Frame; missing
+  or ambiguous geometry is never guessed.
 - Cookies and browser User-Agent are synchronized only after challenge markers disappear, and later
   same-origin MineBBS requests remain on the Chromium transport. Missing geometry, invalid dimensions,
   unavailable `CloakBrowser`/Chromium, failed verification, and all challenged POST requests remain

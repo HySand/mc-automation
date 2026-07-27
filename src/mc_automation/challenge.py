@@ -52,6 +52,7 @@ class EsaSliderChallengeResolver:
         ("ctp_container", ".ctp-checkbox-container"),
         ("single_label", "label"),
     )
+    TURNSTILE_BODY_SELECTOR = "body"
     TURNSTILE_APPROACH_STEPS = 72
     TURNSTILE_APPROACH_DURATION_MS = 720
     HORIZONTAL_GRAB_RANGE = (0.22, 0.78)
@@ -990,7 +991,11 @@ class EsaSliderChallengeResolver:
         target_x = x + (
             width / 2
             if control_kind in {"role_checkbox", "checkbox"}
-            else min(width * 0.22, max(18.0, height * 0.65))
+            else (
+                min(width * 0.12, 32.0)
+                if control_kind == "turnstile_body"
+                else min(width * 0.22, max(18.0, height * 0.65))
+            )
         )
         target_y = y + height / 2
         viewport = getattr(page, "viewport_size", None)
@@ -1054,7 +1059,10 @@ class EsaSliderChallengeResolver:
             frame_url, frame_title = await self._read_playwright_frame_identity(frame)
             if self._classify_page(title=frame_title, url=frame_url) != "cloudflare_waiting":
                 continue
-            for control_kind, selector in self.TURNSTILE_CONTROL_SELECTORS:
+            selectors = list(self.TURNSTILE_CONTROL_SELECTORS)
+            if self._is_turnstile_frame_url(frame_url):
+                selectors.append(("turnstile_body", self.TURNSTILE_BODY_SELECTOR))
+            for control_kind, selector in selectors:
                 try:
                     locator = frame.locator(selector)
                     control_count = int(await locator.count())
@@ -1076,6 +1084,13 @@ class EsaSliderChallengeResolver:
                     continue
                 return control_kind, control_count, box
         return None
+
+    @staticmethod
+    def _is_turnstile_frame_url(url: str) -> bool:
+        parsed = urlsplit(url)
+        return (
+            parsed.hostname or ""
+        ).casefold() == "challenges.cloudflare.com" and "/turnstile/" in parsed.path.casefold()
 
     async def _drag_slider_playwright(self, page: Any, *, expected_url: str | None = None) -> bool:
         deadline = self._monotonic() + self.wait_seconds

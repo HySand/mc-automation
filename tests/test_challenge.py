@@ -565,6 +565,44 @@ def test_turnstile_control_discovery_rejects_ambiguous_matches() -> None:
     assert asyncio.run(EsaSliderChallengeResolver()._find_turnstile_control(page)) is None
 
 
+def test_turnstile_control_discovery_uses_the_bound_child_frame_body_as_fallback() -> None:
+    class Locator:
+        first: Locator
+
+        def __init__(self, selector: str) -> None:
+            self.selector = selector
+            self.first = self
+
+        async def count(self) -> int:
+            return 1 if self.selector == "body" else 0
+
+        async def bounding_box(self, *, timeout: int) -> dict[str, float]:
+            assert timeout == 500
+            return {"x": 400.0, "y": 300.0, "width": 300.0, "height": 65.0}
+
+    class ChallengeFrame:
+        url = "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/f"
+
+        async def title(self) -> str:
+            return "Just a moment..."
+
+        def locator(self, selector: str) -> Locator:
+            return Locator(selector)
+
+    match = asyncio.run(
+        EsaSliderChallengeResolver()._find_turnstile_control(
+            SimpleNamespace(frames=[ChallengeFrame()])
+        )
+    )
+
+    assert match is not None
+    assert match[0] == "turnstile_body"
+    assert EsaSliderChallengeResolver._is_turnstile_frame_url(ChallengeFrame.url)
+    assert not EsaSliderChallengeResolver._is_turnstile_frame_url(
+        "https://example.test/challenges.cloudflare.com/turnstile/"
+    )
+
+
 def test_browser_transport_refuses_cross_origin_after_origin_is_bound() -> None:
     resolver = EsaSliderChallengeResolver()
     resolver._browser_origin = "https://www.minebbs.com/login/"

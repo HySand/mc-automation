@@ -116,10 +116,13 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   to a second resolver cycle, and challenged POST requests are never replayed.
 - A MineBBS HTTP 403 may render a Cloudflare managed-challenge Turnstile frame instead of the ESA
   slider. The same visible browser may wait for one unique visible standard checkbox/label inside a
-  frame already classified as an active Cloudflare challenge, approach it with a bounded Bezier
-  pointer path, and perform one normal press/release click per browser attempt. Missing, hidden, or
-  ambiguous controls remain unresolved; no AI, token fabrication, arbitrary coordinate guessing, or
-  challenged POST replay is allowed.
+  frame already classified as an active Cloudflare challenge. If the provider hides the internal
+  control in closed shadow DOM, only the unique `body` geometry of an exact
+  `challenges.cloudflare.com/.../turnstile/...` child Frame may supply the standard widget checkbox
+  region. The browser approaches that DOM-derived point with a bounded Bezier path and performs one
+  normal press/release click per browser attempt. Missing, hidden, or ambiguous geometry remains
+  unresolved; no AI, token fabrication, whole-page coordinate guessing, or challenged POST replay
+  is allowed.
 - WDSJFWQ image CAPTCHAs are handled only inside the WDSJFWQ like form path when
   `AI_SOLVER_WDSJFWQ_CAPTCHA_ENABLED=true`; the adapter downloads the captcha image with the same
   session, asks the model for strict JSON, validates the code shape, fills a random username, and
@@ -360,7 +363,7 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 | Non-positive dimensions or track not wider than handle | Return `False`; no drag |
 | Drag completes but challenge remains | Return `False`; no cookie/User-Agent sync |
 | Cloudflare/ESA clears through iframe/JavaScript without slider DOM | Detect structural clearance during the geometry wait and continue without mouse input |
-| Active Cloudflare Turnstile frame exposes one visible checkbox/label | Click it once with a bounded humanized approach and wait for structural clearance |
+| Active Cloudflare Turnstile frame exposes one visible checkbox/label or one exact child-frame body | Click its DOM-derived checkbox region once with a bounded humanized approach and wait for structural clearance |
 | Turnstile control is missing, hidden, or ambiguous | Leave the challenge unresolved; do not guess a click point |
 | Browser/profile cleanup fails | Return `False`; no cookie/User-Agent sync |
 | Initial challenged GET/HEAD clears through browser request | Enter sticky same-origin browser mode and return the Chromium response |
@@ -394,7 +397,8 @@ if CAPTCHA_CODE_PATTERN.fullmatch(solution.code):
 - Assert a challenge that changes from Cloudflare HTML to a structurally clear same-origin page
   during the slider wait succeeds without querying slider geometry or emitting mouse input.
 - Assert an active Cloudflare challenge frame prevents false clearance, a unique visible Turnstile
-  control receives one Bezier-approach click, and missing/ambiguous controls receive no click.
+  control or exact child-frame body receives one Bezier-approach click, spoofed hosts are rejected,
+  and missing/ambiguous geometry receives no click.
 - Assert cookies/User-Agent copy only after clear, the browser profile closes on all paths, missing
   geometry is unresolved, and missing `CloakBrowser`/Chromium is unresolved.
 - Assert a challenged GET switches `HttpTransport` to the browser bridge, later GET/HEAD/POST bypass
