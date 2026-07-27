@@ -239,6 +239,7 @@ def test_browser_extra_and_workflow_use_free_cloakbrowser() -> None:
     assert browser_dependencies == ["cloakbrowser==0.3.32"]
     legacy_browser_command = "python -m " + "play" + "wright"
     assert legacy_browser_command not in workflow.casefold()
+    assert 'CLOAKBROWSER_AUTO_UPDATE: "false"' in workflow
     assert "MINEBBS_ESA_SLIDER_ENABLED" in workflow
     assert "python -m cloakbrowser install" in workflow
     assert "MINEBBS_BROWSER_EXECUTABLE_PATH" in workflow

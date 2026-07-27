@@ -56,6 +56,7 @@ jobs:
     timeout-minutes: 15
     env:
       MC_AUTOMATION_LOG_FORMAT: human
+      CLOAKBROWSER_AUTO_UPDATE: "false"
       KLPBBS_ENABLED: ${{ matrix.klpbbs_enabled }}
       KLPBBS_USERNAME: ${{ secrets.KLPBBS_USERNAME }}
       KLPBBS_PASSWORD: ${{ secrets.KLPBBS_PASSWORD }}

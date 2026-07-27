@@ -213,6 +213,9 @@ class EsaSliderChallengeResolver:
             )
             return False
 
+        # The pinned free build must not start its background updater. Besides changing
+        # reproducibility, that daemon can crash Python during process shutdown on Linux.
+        os.environ.setdefault("CLOAKBROWSER_AUTO_UPDATE", "false")
         try:
             browser_module = importlib.import_module("cloakbrowser")
         except ImportError:
