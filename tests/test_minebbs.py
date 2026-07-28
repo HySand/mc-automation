@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -137,8 +138,11 @@ def test_purchase_prefers_purple_and_submits_discovered_form() -> None:
             "https://example.test": "<span>紫水晶：1</span>",
             "https://example.test/account/": "<span>金粒：100</span>",
             "https://example.test/tool-shop/18/purchase": (
-                '<form method="post" action="/tool-shop/18/purchase/confirm">'
-                '<input type="hidden" name="_xfToken" value="token"><button>购买</button></form>'
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input type="hidden" name="_xfToken" value="token">'
+                '<input type="number" name="quantity" value="9">'
+                '<input type="hidden" name="_xfRedirect" value="/tool-shop/">'
+                '<button type="submit" class="button--primary"></button></form>'
             ),
         },
         posts=["购买成功"],
@@ -150,8 +154,116 @@ def test_purchase_prefers_purple_and_submits_discovered_form() -> None:
     assert result.status is ActionStatus.SUCCESS
     assert "紫晶顶贴卡" in result.message
     post = next(call for call in transport.calls if call[0] == "POST")
-    assert post[1].endswith("/tool-shop/18/purchase/confirm")
+    assert post[1].endswith("/tool-shop/18/purchase")
     assert post[2]["data"]["_xfToken"] == "token"
+    assert post[2]["data"]["quantity"] == "1"
+
+
+def test_purchase_form_logs_structural_selection(caplog: object) -> None:
+    transport = FakeTransport(
+        {
+            "https://example.test": "<span>紫水晶：1</span>",
+            "https://example.test/account/": "<span>金粒：100</span>",
+            "https://example.test/tool-shop/18/purchase": (
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input type="hidden" name="_xfToken" value="secret-token">'
+                '<input type="number" name="quantity" value="1">'
+                '<button type="submit"></button></form>'
+            ),
+        },
+        posts=["购买成功"],
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url="https://example.test")
+    caplog.set_level(logging.INFO, logger="mc_automation.steps")  # type: ignore[attr-defined]
+
+    adapter.purchase_bump_item()
+
+    message = next(
+        record.message
+        for record in caplog.records  # type: ignore[attr-defined]
+        if "检查表单" in record.message
+    )
+    assert "表单数 1" in message
+    assert "字段 ['_xfToken', 'quantity']" in message
+    assert "secret-token" not in message
+
+
+def test_purchase_accepts_xenforo_ajax_success_response() -> None:
+    transport = FakeTransport(
+        {
+            "https://example.test": "<span>紫水晶：1</span>",
+            "https://example.test/account/": "<span>金粒：0</span>",
+            "https://example.test/tool-shop/18/purchase": (
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input name="quantity" value="1"><button type="submit"></button></form>'
+            ),
+        },
+        posts=['{"status":"ok","redirect":"/tool-shop/"}'],
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url="https://example.test")
+
+    result = adapter.purchase_bump_item()
+
+    assert result.status is ActionStatus.SUCCESS
+
+
+def test_purchase_does_not_treat_json_error_as_success() -> None:
+    transport = FakeTransport(
+        {
+            "https://example.test": "<span>紫水晶：1</span>",
+            "https://example.test/account/": "<span>金粒：0</span>",
+            "https://example.test/tool-shop/18/purchase": (
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input name="quantity" value="1"><button type="submit"></button></form>'
+            ),
+        },
+        posts=['{"status":"ok","success":false,"errors":["余额不足"]}'],
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url="https://example.test")
+
+    result = adapter.purchase_bump_item()
+
+    assert result.status is ActionStatus.INSUFFICIENT_RESOURCES
+
+
+def test_purchase_does_not_treat_explicit_false_json_as_success() -> None:
+    transport = FakeTransport(
+        {
+            "https://example.test": "<span>紫水晶：1</span>",
+            "https://example.test/account/": "<span>金粒：0</span>",
+            "https://example.test/tool-shop/18/purchase": (
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input name="quantity" value="1"><button type="submit"></button></form>'
+            ),
+        },
+        posts=['{"status":"ok","success":false}'],
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url="https://example.test")
+
+    result = adapter.purchase_bump_item()
+
+    assert result.status is ActionStatus.TECHNICAL_FAILURE
+
+
+def test_purchase_form_rejects_ambiguous_structural_candidates() -> None:
+    transport = FakeTransport(
+        {
+            "https://example.test": "<span>紫水晶：1</span>",
+            "https://example.test/account/": "<span>金粒：100</span>",
+            "https://example.test/tool-shop/18/purchase": (
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input name="quantity" value="1"><button type="submit"></button></form>'
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input name="quantity" value="1"><button type="submit"></button></form>'
+            ),
+        }
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url="https://example.test")
+
+    with pytest.raises(SiteParseError, match="购买表单"):
+        adapter.purchase_bump_item()
+
+    assert not any(call[0] == "POST" for call in transport.calls)
 
 
 def test_same_day_gold_exclusion_prevents_purchase_submission() -> None:

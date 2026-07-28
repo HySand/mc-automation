@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup, Tag
 
 from ..config import SiteConfig
 from ..models import ActionResult, ActionStatus, Inventory, Resources
+from ..step_log import log_step
 from ..transport import HttpTransport
 from .base import SiteParseError
 
@@ -79,6 +81,74 @@ class MineBBSAdapter:
             method=str(form.get("method", "post")).upper(),
             data=self._hidden_fields(form),
         )
+
+    def _purchase_form(self, html: str, page_url: str) -> _FormSubmission:
+        soup = BeautifulSoup(html, "html.parser")
+        forms = soup.select("form")
+        target = urlsplit(page_url)
+        candidates: list[tuple[Tag, str, str]] = []
+        for form in forms:
+            raw_action = str(form.get("action", ""))
+            method = str(form.get("method", "post")).upper()
+            if not raw_action or method != "POST":
+                continue
+            action = self._url(raw_action)
+            parsed = urlsplit(action)
+            try:
+                parsed_port = parsed.port or (443 if parsed.scheme.casefold() == "https" else 80)
+                target_port = target.port or (443 if target.scheme.casefold() == "https" else 80)
+                same_origin = (
+                    parsed.scheme.casefold() == target.scheme.casefold()
+                    and (parsed.hostname or "").casefold() == (target.hostname or "").casefold()
+                    and parsed_port == target_port
+                )
+            except ValueError:
+                same_origin = False
+            field_names = {
+                str(field.get("name", ""))
+                for field in form.select("input[name], select[name], textarea[name]")
+            }
+            submit_controls = form.select(
+                'button[type="submit"], button:not([type]), input[type="submit"]'
+            )
+            if (
+                same_origin
+                and parsed.path.rstrip("/") == target.path.rstrip("/")
+                and "quantity" in field_names
+                and len(submit_controls) == 1
+            ):
+                candidates.append((form, action, method))
+
+        metadata: dict[str, object] = {
+            "action": "purchase_bump_item",
+            "url": page_url,
+            "form_count": len(forms),
+            "control_count": len(candidates),
+        }
+        if len(candidates) == 1:
+            selected, _action, method = candidates[0]
+            metadata.update(
+                {
+                    "field_names": sorted(
+                        str(field.get("name", ""))
+                        for field in selected.select("input[name], select[name], textarea[name]")
+                    ),
+                    "submit_method": method,
+                }
+            )
+        log_step(
+            "form_inspection",
+            site=self.name,
+            status="completed" if len(candidates) == 1 else "failed",
+            **metadata,
+        )
+        if len(candidates) != 1:
+            raise SiteParseError("MineBBS 无法唯一识别购买表单")
+
+        form, action, method = candidates[0]
+        data = self._hidden_fields(form)
+        data["quantity"] = "1"
+        return _FormSubmission(action=action, method=method, data=data)
 
     def _submit(self, submission: _FormSubmission) -> str:
         if submission.method == "GET":
@@ -242,9 +312,54 @@ class MineBBSAdapter:
     def _purchase(self, item_id: int, label: str, item_key: str) -> ActionResult:
         page_url = self._url(f"tool-shop/{item_id}/purchase")
         page = self.transport.get(page_url)
-        submission = self._unique_form(page.text, "购买")
+        submission = self._purchase_form(page.text, page_url)
+        log_step(
+            "form_submission",
+            site=self.name,
+            status="started",
+            url=submission.action,
+            submit_method=submission.method,
+            field_names=sorted(submission.data),
+            field_count=len(submission.data),
+        )
         result = self._submit(submission)
-        if any(marker in result for marker in ("购买成功", "success", "已购买")):
+        result_lower = result.casefold()
+        json_response = False
+        response_status = ""
+        response_has_errors = False
+        try:
+            payload = json.loads(result)
+        except (TypeError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict):
+            json_response = True
+            response_status = str(payload.get("status", "")).casefold()
+            response_has_errors = bool(payload.get("errors") or payload.get("error"))
+        insufficient_marker = any(
+            marker in result for marker in ("不足", "余额", "限购", "无法购买")
+        )
+        if json_response and isinstance(payload, dict):
+            response_success = payload.get("success")
+            success_marker = response_success is True or (
+                response_success is not False
+                and response_status in {"ok", "success", "completed"}
+                and not response_has_errors
+                and not insufficient_marker
+            )
+        else:
+            success_marker = any(
+                marker in result_lower for marker in ("购买成功", "success", "已购买")
+            )
+        if success_marker:
+            log_step(
+                "form_submission",
+                site=self.name,
+                status="completed",
+                url=submission.action,
+                json_response=json_response,
+                success_marker=True,
+                result_status=ActionStatus.SUCCESS.value,
+            )
             self._preferred_item = label
             return ActionResult(
                 self.name,
@@ -253,10 +368,28 @@ class MineBBSAdapter:
                 f"已购买 1 张{label}",
                 metadata={"item": item_key},
             )
-        if any(marker in result for marker in ("不足", "余额", "限购", "无法购买")):
+        if insufficient_marker:
+            log_step(
+                "form_submission",
+                site=self.name,
+                status="completed",
+                url=submission.action,
+                json_response=json_response,
+                success_marker=False,
+                result_status=ActionStatus.INSUFFICIENT_RESOURCES.value,
+            )
             return self._result(
                 "purchase_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, f"无法购买{label}"
             )
+        log_step(
+            "form_submission",
+            site=self.name,
+            status="failed",
+            url=submission.action,
+            json_response=json_response,
+            success_marker=False,
+            result_status=ActionStatus.TECHNICAL_FAILURE.value,
+        )
         return self._result(
             "purchase_bump_item", ActionStatus.TECHNICAL_FAILURE, f"购买{label}后未识别到明确结果"
         )

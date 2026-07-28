@@ -173,11 +173,14 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Assert the preserved adapter receives `Retry(total=2)`.
 - Probe KLPBBS homepage, login page, and forum list with read-only GET requests before release.
 - KLPBBS may alternate between a complete forum list and an incomplete HTTP 200 shell. Rank parsing
-  tries both the rewritten `forum-56-1.html` path and canonical
-  `forum.php?mod=forumdisplay&fid=56&page=1` path. It accepts explicit `normalthread_<ID>` DOM rows,
-  with a fallback to the same table's `th.new a.xst` subject links. Both incomplete responses remain
-  a parse failure and never lead to inventory or spending actions. Logs record only the parsed normal
-  thread count, not titles, authors, or HTML.
+  makes at most three read-only attempts in rewritten/canonical/rewritten order. It accepts explicit
+  `normalthread_<ID>` DOM rows, with a fallback to the same table's `th.new a.xst` subject links.
+  Three incomplete responses remain a parse failure and never lead to inventory or spending actions.
+  Logs record only attempt numbers and parsed row/link counts, not titles, authors, or HTML.
+- A structurally complete empty task center (`body.pg_task` plus task navigation) is not an unknown
+  shell. The adapter reads `item=doing` before applying stable task ID 1, so an already-active task
+  is never re-applied merely because the new-task list is empty. Unknown task-center and doing-page
+  shells retain three bounded reads and skip only promotion when state remains unprovable.
 
 ### 7. Wrong vs Correct
 
@@ -191,6 +194,24 @@ HttpTransport()  # KLPBBS silently uses the generic session
 
 ```python
 HttpTransport(session=create_cloudscraper_session())
+```
+
+#### Wrong: treat two HTTP 200 shells as a rank result
+
+```python
+for path in (rewritten_path, canonical_path):
+    if parse_rows(get(path)):
+        break
+```
+
+#### Correct: make one bounded fresh read after both variants are incomplete
+
+```python
+for path in (rewritten_path, canonical_path, rewritten_path):
+    if parse_rows(get(path)):
+        break
+else:
+    raise SiteParseError("forum structure is still incomplete")
 ```
 
 ## Scenario: OpenAI-Compatible WDSJFWQ Captcha Solver
@@ -486,6 +507,13 @@ CSRF tokens, response bodies, API keys, and extension paths are never
 written to state, summaries, or ordinary logs. Unknown rank, owner, balance, inventory, form, CSRF
 token, or target option raises `SiteParseError` before a side effect.
 
+MineBBS purchase forms are identified by one same-origin POST action matching the current purchase
+path, a `quantity` field, and exactly one submit control. Localized button text is not an identity
+contract. The submitted quantity is forced to `1`; field names and counts may be logged, but field
+values may not. XenForo AJAX JSON accepts explicit `success=true` or an error-free `status` of
+`ok`/`success`/`completed`; explicit `success=false`, `error(s)`, and insufficient-resource markers
+take precedence over generic status text.
+
 KLPBBS ownership compares the authenticated Discuz UID discovered after login with the first post
 author UID encoded in `space-uid-<UID>.html` or `home.php?mod=space&uid=<UID>`. The configured login
 identifier may be an email address and must never be compared directly with the public display name.
@@ -518,6 +546,11 @@ complete allowlisted JSONL diagnostic stream.
 | KLPBBS rank at or below threshold | `skipped`; do not query inventory or spend |
 | MineBBS interval has not elapsed | `skipped`; do not query rank, inventory, or balances |
 | KLPBBS promotion task page remains an unparseable shell after bounded retries | Return `skipped`, do not visit proxies, and continue the KLPBBS main flow |
+| KLPBBS task center is structurally complete but has no available task | Read the doing list before applying stable task ID 1 |
+| KLPBBS first two rank pages are incomplete HTTP 200 shells | Perform one final read-only primary-path attempt; fail closed if it is also incomplete |
+| MineBBS purchase page has one exact structural form without localized button text | Submit exactly quantity `1` once |
+| MineBBS purchase form is absent/ambiguous/cross-origin or lacks quantity/submit control | Raise `SiteParseError`; do not submit |
+| MineBBS AJAX response contains explicit failure plus a generic `status=ok` | Failure wins; never report purchase success |
 
 ## Required tests
 
@@ -526,7 +559,13 @@ ESA DOM browser retry, sticky same-origin browser transport, WDSJFWQ captcha for
 model JSON parsing, Cookie/User-Agent synchronization, challenged/browser-mode POST no-replay,
 repeated-run challenge handling, cooldown/interval boundaries,
 ownership by authenticated Discuz UID, parser ambiguity, state redaction, cross-site failure isolation, WARP fail-closed
-workflow wiring, and promotion-click proxy isolation. The quality gate is:
+workflow wiring, and promotion-click proxy isolation.
+
+MineBBS purchase regressions must use the live structural shape (`_xfToken`, `quantity`,
+`_xfRedirect`, textless submit button), assert exact same-origin selection and quantity `1`, cover
+ambiguous forms, and prove logged field names never expose values. KLPBBS regressions must cover a
+known empty task center, doing-list precedence, and primary/canonical/primary rank recovery. The
+quality gate is:
 
 ```text
 ruff format --check .

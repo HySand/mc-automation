@@ -249,6 +249,11 @@ def _safe_value(key: str, value: object) -> SafeValue:
 def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
     preferred = (
         ("action", "操作", ""),
+        ("form_count", "表单数", ""),
+        ("control_count", "候选控件", ""),
+        ("field_count", "字段数", ""),
+        ("field_names", "字段", ""),
+        ("submit_method", "提交方式", ""),
         ("progress_percent", "进度", "%"),
         ("proxy_successes", "有效访问", ""),
         ("attempts", "已尝试", ""),

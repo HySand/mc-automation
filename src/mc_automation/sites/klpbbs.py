@@ -73,7 +73,9 @@ class KLPBBSAdapter:
         progress = float(match.group(1))
         return progress if 0 <= progress <= 100 else None
 
-    def _promotion_task(self, html: str) -> _PromotionTask | None:
+    def _promotion_task(
+        self, html: str, *, allow_known_empty_task_center: bool = False
+    ) -> _PromotionTask | None:
         soup = BeautifulSoup(html, "html.parser")
         page_text = soup.get_text(" ", strip=True)
         candidates: list[Tag] = []
@@ -129,6 +131,12 @@ class KLPBBSAdapter:
                 )
             if any(marker in page_text for marker in ("暂无可用任务", "没有可用任务", "暂无任务")):
                 return None
+            if (
+                allow_known_empty_task_center
+                and soup.select_one("body.pg_task") is not None
+                and soup.select_one('a[href*="mod=task"][href*="item="]') is not None
+            ):
+                return None
             raise SiteParseError("KLPBBS 推广任务页面结构无法识别")
 
         scope = min(candidates, key=lambda item: len(item.get_text(" ", strip=True)))
@@ -170,7 +178,10 @@ class KLPBBSAdapter:
         for attempt in range(1, 4):
             page = self.transport.get(self._url(path))
             try:
-                return self._promotion_task(page.text)
+                return self._promotion_task(
+                    page.text,
+                    allow_known_empty_task_center="item=doing" not in path,
+                )
             except SiteParseError as exc:
                 error = exc
                 log_step(
@@ -238,13 +249,26 @@ class KLPBBSAdapter:
         if not self.config.promotion_enabled:
             return self._result("promotion_task", ActionStatus.SKIPPED, "推广任务未启用")
 
+        task_center_unparseable = False
         try:
             task = self._load_promotion_task()
         except SiteParseError:
-            # KLPBBS task 1 is stable even when the task-center list renders an incomplete shell.
-            task = _PromotionTask(apply_url=self._url("home.php?mod=task&do=apply&id=1"))
+            task_center_unparseable = True
+            task = None
         if task is None:
-            return self._result("promotion_task", ActionStatus.SKIPPED, "当前没有可用推广任务")
+            try:
+                task = self._load_promotion_task("home.php?mod=task&item=doing")
+            except SiteParseError:
+                return self._result(
+                    "promotion_task",
+                    ActionStatus.SKIPPED,
+                    "推广任务状态暂时无法确认，已跳过推广并继续主流程",
+                )
+            if task is None and task_center_unparseable:
+                # Task 1 is stable even when the task-center list renders an incomplete shell.
+                task = _PromotionTask(apply_url=self._url("home.php?mod=task&do=apply&id=1"))
+            elif task is None:
+                return self._result("promotion_task", ActionStatus.SKIPPED, "当前没有可用推广任务")
         if task.apply_url is not None:
             response = self.transport.get(task.apply_url)
             apply_succeeded = any(
@@ -503,7 +527,9 @@ class KLPBBSAdapter:
             "forum-56-1.html",
             "forum.php?mod=forumdisplay&fid=56&page=1",
         )
-        for forum_path in forum_paths:
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            forum_path = forum_paths[(attempt - 1) % len(forum_paths)]
             page = self.transport.get(self._url(forum_path))
             soup = BeautifulSoup(page.text, "html.parser")
             ids = [
@@ -536,9 +562,13 @@ class KLPBBSAdapter:
                 status="completed" if ids else "incomplete",
                 normal_thread_count=len(ids),
                 subject_link_count=len(subject_links),
+                attempt=attempt,
+                max_attempts=max_attempts,
             )
             if ids:
                 break
+            if attempt < max_attempts:
+                time.sleep(1)
         if not ids:
             raise SiteParseError("KLPBBS 服务器大厅结构无法识别")
         unique_ids = list(dict.fromkeys(ids))

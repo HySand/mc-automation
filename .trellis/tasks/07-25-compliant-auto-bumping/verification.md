@@ -31,6 +31,8 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | KLPBBS forum-list regression | First WARP run returned two 116584-byte HTTP 200 pages but no recognized normal rows. Rank parsing now probes the rewritten and canonical forum paths, accepts only normal-row IDs or their `th.new a.xst` subject links, and logs a non-sensitive row count | Pass in regression tests; live Actions recheck pending |
 | KLPBBS opaque promotion draw | Live task reached draw but returned no known success text. Adapter now confirms success only if a fresh `item=doing` page no longer contains task ID 1 | Pass in regression tests; live Actions recheck pending |
 | KLPBBS promotion shell isolation | Runs 30276801323 and 30278711461 both returned an unparseable task-center/doing shell after login and sign-in. The adapter now skips only the uncertain promotion action, never visits proxies without confirmed task state, and continues the KLPBBS rank/ownership/bump path | Pass in regression tests; next Actions run will verify the continued main flow |
+| MineBBS purchase form regression | Run 30288716582 cleared Cloudflare, logged in, signed in, verified ownership, and read inventory, then failed after GET `/tool-shop/18/purchase` and before any purchase POST. A local authenticated read-only probe found four forms; the unique purchase form is same-origin POST with `_xfToken`, `quantity`, `_xfRedirect`, and a textless submit button. The adapter now selects that structural contract, forces quantity `1`, and parses XenForo AJAX success/failure without logging values | Pass locally and in regression tests; Actions recheck pending |
+| KLPBBS bounded shell recovery | Run 30288716582 received unparseable task pages and two incomplete forum-list variants. A complete empty task center now causes a doing-list read before any stable-task apply, while rank uses at most primary/canonical/primary reads and still fails closed after three shells | Pass in 28 adapter tests; Actions recheck pending |
 
 Final gate:
 
@@ -38,7 +40,7 @@ Final gate:
 ruff format --check .: pass (34 files)
 ruff check .: pass
 mypy src: pass (18 source files)
-pytest: 171 passed; coverage 81%
+pytest: 185 passed; coverage 81%
 uv lock --check: pass
 Workflow YAML parse: pass
 secret scan: 0 matches
@@ -92,4 +94,49 @@ rejected held-only alternatives that isolated the missing pre-press pointer hist
 - [x] Updated `.trellis/spec/backend/site-automation-contracts.md`.
 - [x] Updated `.trellis/spec/guides/cross-layer-thinking-guide.md`.
 - [x] Added regression tests for bridge fallback and POST replay.
+- [x] Checked template synchronization; this repository has no `src/templates/markdown/spec/` tree.
+
+## Bug Analysis: live site structure diverged from parser assumptions
+
+### 1. Root Cause Category
+
+- **Category**: D/E - Test coverage gap and implicit assumption.
+- **Specific Cause**: The MineBBS purchase fixture gave the submit button localized `购买` text and
+  a synthetic `/confirm` action, while the live XenForo form posts to its current path and has a
+  textless submit button. KLPBBS rank handling treated two distinct URLs as sufficient recovery even
+  though both can independently return transient HTTP 200 shells.
+
+### 2. Why Fixes Failed
+
+1. Earlier challenge work stopped at authenticated page access, so it proved transport continuity
+   but did not validate the first purchase form against live markup.
+2. Fixture-driven form discovery encoded presentation text as identity and therefore passed while
+   the real structural form failed before POST.
+3. KLPBBS used URL diversity as a proxy for response freshness; the Actions evidence showed both
+   variants could be incomplete in one run.
+
+### 3. Prevention Mechanisms
+
+| Priority | Mechanism | Specific Action | Status |
+|---|---|---|---|
+| P0 | Runtime safety | Match MineBBS purchase by same-origin action, POST method, quantity field, and unique submit control; force quantity `1` | DONE |
+| P0 | Result parsing | Make explicit JSON failure/errors and resource markers override generic `status=ok` | DONE |
+| P0 | Test coverage | Reproduce the live textless form, ambiguity, JSON success/false/error, and redacted logging | DONE |
+| P1 | Read recovery | Retry KLPBBS rank in primary/canonical/primary order and stop after three incomplete pages | DONE |
+| P1 | Task safety | Check the doing list before stable task apply when the new-task center is empty or unparseable | DONE |
+
+### 4. Systematic Expansion
+
+- **Similar Issues**: Login, inventory, and apply forms can fail the same way if localized labels are
+  treated as stable identifiers instead of action/method/field contracts.
+- **Design Improvement**: External HTML parsers should separate structural identity from display
+  text; response classification should model success and failure fields explicitly.
+- **Process Improvement**: Before enabling a new side effect in Actions, capture one authenticated
+  read-only structural probe of the immediately preceding form and make that shape a fixture.
+
+### 5. Knowledge Capture
+
+- [x] Updated `.trellis/spec/backend/site-automation-contracts.md`.
+- [x] Updated `.trellis/spec/guides/cross-layer-thinking-guide.md`.
+- [x] Updated live-shape and shell-retry regression tests.
 - [x] Checked template synchronization; this repository has no `src/templates/markdown/spec/` tree.

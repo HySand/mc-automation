@@ -120,6 +120,10 @@ After implementation:
       identity—not only cookies and User-Agent—still satisfies the upstream security contract
 - [ ] For side-effecting requests, distinguished "proven not sent" from "possibly sent" and allowed
       retries only in the former state
+- [ ] For external HTML forms, identified the action by origin, path, method, required field set,
+      and unique submit control instead of localized button text
+- [ ] For response payloads, made explicit failure fields and business-error markers override a
+      generic transport/status success marker
 - [ ] Checked that consumers import shared decoders / projections instead of
       casting payload fields locally
 - [ ] Checked that derived state points back to the source event identifier

@@ -139,6 +139,25 @@ def test_rank_reloads_once_when_the_forum_returns_an_incomplete_200_page() -> No
     assert [call[1] for call in transport.calls] == [forum_url, fallback_url]
 
 
+def test_rank_retries_primary_after_two_incomplete_200_pages(monkeypatch: object) -> None:
+    forum_url = "https://example.test/forum-56-1.html"
+    fallback_url = "https://example.test/forum.php?mod=forumdisplay&fid=56&page=1"
+    transport = FakeTransport(
+        {
+            forum_url: [
+                "<html>incomplete primary shell</html>",
+                '<tbody id="normalthread_7"></tbody><tbody id="normalthread_42"></tbody>',
+            ],
+            fallback_url: "<html>incomplete canonical shell</html>",
+        }
+    )
+    monkeypatch.setattr("mc_automation.sites.klpbbs.time.sleep", lambda _seconds: None)  # type: ignore[attr-defined]
+    site = KLPBBSAdapter(config(), transport, base_url="https://example.test")
+
+    assert site.get_thread_rank() == 2
+    assert [call[1] for call in transport.calls] == [forum_url, fallback_url, forum_url]
+
+
 def test_rank_falls_back_to_discuz_subject_links_when_row_ids_are_absent() -> None:
     forum_url = "https://example.test/forum-56-1.html"
     html = """
@@ -530,9 +549,30 @@ def test_promotion_task_uses_stable_task_one_when_the_list_is_incomplete() -> No
         task_url,
         task_url,
         task_url,
+        doing_url,
         apply_url,
         doing_url,
     ]
+
+
+def test_promotion_checks_doing_list_after_known_empty_task_center() -> None:
+    task_url = "https://example.test/home.php?mod=task"
+    doing_url = "https://example.test/home.php?mod=task&item=doing"
+    draw_url = "https://example.test/home.php?mod=task&do=draw&id=1"
+    task_center = (
+        '<body class="pg_task">'
+        '<a href="home.php?mod=task&item=doing">doing</a>'
+        '<a href="home.php?mod=task&item=new">new</a>'
+        "</body>"
+    )
+    doing = '<span id="csc_1">100.00</span><a href="home.php?mod=task&do=draw&id=1">draw</a>'
+    transport = FakeTransport({task_url: task_center, doing_url: doing, draw_url: "succeed"})
+    adapter = KLPBBSAdapter(promotion_config(), transport, base_url="https://example.test")
+
+    result = adapter.run_promotion_task()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert [call[1] for call in transport.calls] == [task_url, doing_url, draw_url]
 
 
 def test_promotion_task_requires_a_proxy_visitor() -> None:
@@ -607,7 +647,6 @@ def test_promotion_falls_back_to_stable_task_one_and_configured_url() -> None:
         task_url,
         task_url,
         task_url,
-        apply_url,
         doing_url,
         draw_url,
     ]
@@ -642,7 +681,6 @@ def test_promotion_incomplete_doing_page_skips_without_visiting_proxies() -> Non
         task_url,
         task_url,
         task_url,
-        apply_url,
         doing_url,
         doing_url,
         doing_url,
