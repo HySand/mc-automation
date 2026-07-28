@@ -18,14 +18,17 @@ class StubResponse:
 
 
 class FakeTransport:
-    def __init__(self, pages: dict[str, str], posts: list[str] | None = None) -> None:
+    def __init__(self, pages: dict[str, str | list[str]], posts: list[str] | None = None) -> None:
         self.pages = pages
         self.posts = list(posts or [])
         self.calls: list[tuple[str, str, dict[str, Any]]] = []
 
     def get(self, url: str, **kwargs: Any) -> StubResponse:
         self.calls.append(("GET", url, kwargs))
-        return StubResponse(self.pages[url])
+        response = self.pages[url]
+        if isinstance(response, list):
+            return StubResponse(response.pop(0))
+        return StubResponse(response)
 
     def post(self, url: str, **kwargs: Any) -> StubResponse:
         self.calls.append(("POST", url, kwargs))
@@ -157,6 +160,8 @@ def test_purchase_prefers_purple_and_submits_discovered_form() -> None:
     assert post[1].endswith("/tool-shop/18/purchase")
     assert post[2]["data"]["_xfToken"] == "token"
     assert post[2]["data"]["quantity"] == "1"
+    assert post[2]["data"]["_xfResponseType"] == "json"
+    assert post[2]["headers"] == {"X-Requested-With": "XMLHttpRequest"}
 
 
 def test_purchase_form_logs_structural_selection(caplog: object) -> None:
@@ -243,6 +248,66 @@ def test_purchase_does_not_treat_explicit_false_json_as_success() -> None:
     result = adapter.purchase_bump_item()
 
     assert result.status is ActionStatus.TECHNICAL_FAILURE
+
+
+def test_purchase_confirms_opaque_redirect_response_by_inventory_increase() -> None:
+    home = "https://example.test"
+    shop = "https://example.test/tool-shop/"
+    inventory = "https://example.test/tool-shop/inventory/"
+    transport = FakeTransport(
+        {
+            home: [
+                '<a href="/tool-shop/inventory/">我的道具</a>',
+                "<span>紫水晶：1</span>",
+                '<a href="/tool-shop/inventory/">我的道具</a>',
+            ],
+            shop: [
+                '<a href="/tool-shop/inventory/">我的道具</a>',
+                '<a href="/tool-shop/inventory/">我的道具</a>',
+            ],
+            inventory: [
+                "<html><body>暂无道具</body></html>",
+                "<form>紫晶顶贴卡 数量：1 <button>使用</button></form>",
+            ],
+            "https://example.test/account/": "<span>金粒：0</span>",
+            "https://example.test/tool-shop/18/purchase": (
+                '<form method="post" action="/tool-shop/18/purchase">'
+                '<input name="quantity" value="1"><button type="submit"></button></form>'
+            ),
+        },
+        posts=["<html><body>商店页面</body></html>"],
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url=home)
+    assert adapter.get_inventory().items["purple"] == 0
+
+    result = adapter.purchase_bump_item()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert result.metadata["item"] == "purple"
+    assert len([call for call in transport.calls if call[0] == "POST"]) == 1
+
+
+def test_apply_accepts_xenforo_ajax_success_response() -> None:
+    inventory = "https://example.test/tool-shop/inventory/"
+    transport = FakeTransport(
+        {
+            "https://example.test": '<a href="/tool-shop/inventory/">我的道具</a>',
+            "https://example.test/tool-shop/": ('<a href="/tool-shop/inventory/">我的道具</a>'),
+            inventory: (
+                '<form method="post" action="/tool-shop/inventory/use">紫晶顶贴卡'
+                '<select name="thread_id"><option value="42">目标 42</option></select>'
+                '<button type="submit">使用</button></form>'
+            ),
+        },
+        posts=['{"status":"ok","redirect":"/threads/42/"}'],
+    )
+    adapter = MineBBSAdapter(config(), transport, base_url="https://example.test")
+
+    result = adapter.apply_bump_item()
+
+    assert result.status is ActionStatus.SUCCESS
+    post = next(call for call in transport.calls if call[0] == "POST")
+    assert post[2]["data"]["_xfResponseType"] == "json"
 
 
 def test_purchase_form_rejects_ambiguous_structural_candidates() -> None:

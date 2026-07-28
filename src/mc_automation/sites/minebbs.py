@@ -42,6 +42,7 @@ class MineBBSAdapter:
         self.transport = transport
         self.base_url = base_url.rstrip("/")
         self._preferred_item: str | None = None
+        self._last_inventory: dict[str, int] | None = None
 
     def _result(self, action: str, status: ActionStatus, message: str) -> ActionResult:
         return ActionResult(self.name, action, status, message)
@@ -148,20 +149,38 @@ class MineBBSAdapter:
         form, action, method = candidates[0]
         data = self._hidden_fields(form)
         data["quantity"] = "1"
+        data["_xfResponseType"] = "json"
         return _FormSubmission(action=action, method=method, data=data)
 
     def _submit(self, submission: _FormSubmission) -> str:
         if submission.method == "GET":
             response = self.transport.get(submission.action, params=submission.data)
         elif submission.method == "POST":
+            data = dict(submission.data)
+            data["_xfResponseType"] = "json"
             response = self.transport.post(
                 submission.action,
-                data=submission.data,
+                data=data,
                 headers={"X-Requested-With": "XMLHttpRequest"},
             )
         else:
             raise SiteParseError("MineBBS 表单使用了不支持的方法")
         return response.text
+
+    @staticmethod
+    def _json_submission_outcome(result: str) -> tuple[bool, bool | None]:
+        try:
+            payload = json.loads(result)
+        except (TypeError, json.JSONDecodeError):
+            return False, None
+        if not isinstance(payload, dict):
+            return False, None
+        if payload.get("success") is False or payload.get("errors") or payload.get("error"):
+            return True, False
+        status = str(payload.get("status", "")).casefold()
+        if payload.get("success") is True or status in {"ok", "success", "completed"}:
+            return True, True
+        return True, None
 
     def authenticate(self) -> ActionResult:
         page = self.transport.get(self._url("login/"))
@@ -219,7 +238,10 @@ class MineBBSAdapter:
                 self._hidden_fields(form),
             )
             result_text = self._submit(submission)
-        if any(marker in result_text for marker in ("签到成功", "已签到", "success")):
+        _json_response, json_outcome = self._json_submission_outcome(result_text)
+        if json_outcome is True or any(
+            marker in result_text for marker in ("签到成功", "已签到", "success")
+        ):
             return self._result("daily_sign_in", ActionStatus.SUCCESS, "签到完成")
         return self._result(
             "daily_sign_in", ActionStatus.SKIPPED, "签到请求完成，站点未返回明确成功标记"
@@ -305,9 +327,19 @@ class MineBBSAdapter:
                 total += int(match.group(1)) if match else 1
             return total
 
-        return Inventory(
-            {"purple": count_item(self.PURPLE_CARD), "gold": count_item(self.GOLD_CARD)}
-        )
+        items = {"purple": count_item(self.PURPLE_CARD), "gold": count_item(self.GOLD_CARD)}
+        self._last_inventory = dict(items)
+        return Inventory(items)
+
+    def _confirm_purchase_in_inventory(self, item_key: str) -> bool:
+        before = None if self._last_inventory is None else self._last_inventory.get(item_key)
+        if before is None:
+            return False
+        try:
+            after = self.get_inventory().items.get(item_key, 0)
+        except SiteParseError:
+            return False
+        return after > before
 
     def _purchase(self, item_id: int, label: str, item_key: str) -> ActionResult:
         page_url = self._url(f"tool-shop/{item_id}/purchase")
@@ -324,28 +356,12 @@ class MineBBSAdapter:
         )
         result = self._submit(submission)
         result_lower = result.casefold()
-        json_response = False
-        response_status = ""
-        response_has_errors = False
-        try:
-            payload = json.loads(result)
-        except (TypeError, json.JSONDecodeError):
-            payload = None
-        if isinstance(payload, dict):
-            json_response = True
-            response_status = str(payload.get("status", "")).casefold()
-            response_has_errors = bool(payload.get("errors") or payload.get("error"))
+        json_response, json_outcome = self._json_submission_outcome(result)
         insufficient_marker = any(
             marker in result for marker in ("不足", "余额", "限购", "无法购买")
         )
-        if json_response and isinstance(payload, dict):
-            response_success = payload.get("success")
-            success_marker = response_success is True or (
-                response_success is not False
-                and response_status in {"ok", "success", "completed"}
-                and not response_has_errors
-                and not insufficient_marker
-            )
+        if json_response:
+            success_marker = json_outcome is True and not insufficient_marker
         else:
             success_marker = any(
                 marker in result_lower for marker in ("购买成功", "success", "已购买")
@@ -380,6 +396,34 @@ class MineBBSAdapter:
             )
             return self._result(
                 "purchase_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, f"无法购买{label}"
+            )
+        inventory_confirmed = False
+        if json_outcome is not False:
+            inventory_confirmed = self._confirm_purchase_in_inventory(item_key)
+            log_step(
+                "purchase_confirmation",
+                site=self.name,
+                status="completed" if inventory_confirmed else "failed",
+                inventory_confirmed=inventory_confirmed,
+            )
+        if inventory_confirmed:
+            log_step(
+                "form_submission",
+                site=self.name,
+                status="completed",
+                url=submission.action,
+                json_response=json_response,
+                success_marker=False,
+                inventory_confirmed=True,
+                result_status=ActionStatus.SUCCESS.value,
+            )
+            self._preferred_item = label
+            return ActionResult(
+                self.name,
+                "purchase_bump_item",
+                ActionStatus.SUCCESS,
+                f"已购买 1 张{label}（库存已确认）",
+                metadata={"item": item_key},
             )
         log_step(
             "form_submission",
@@ -444,7 +488,10 @@ class MineBBSAdapter:
             if not target_bound:
                 raise SiteParseError("MineBBS 顶贴表单未提供配置的目标帖，拒绝提交")
             result = self._submit(submission)
-            if any(marker in result for marker in ("使用成功", "顶贴成功", "success")):
+            _json_response, json_outcome = self._json_submission_outcome(result)
+            if json_outcome is True or any(
+                marker in result for marker in ("使用成功", "顶贴成功", "success")
+            ):
                 return self._result("apply_bump_item", ActionStatus.SUCCESS, f"{label}使用成功")
             if any(marker in result for marker in ("过期", "不存在", "冷却", "无法使用")):
                 return self._result(

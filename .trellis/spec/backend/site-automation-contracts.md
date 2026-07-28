@@ -181,6 +181,9 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   shell. The adapter reads `item=doing` before applying stable task ID 1, so an already-active task
   is never re-applied merely because the new-task list is empty. Unknown task-center and doing-page
   shells retain three bounded reads and skip only promotion when state remains unprovable.
+- Authentication submits the credential-bearing login POST exactly once. Because the homepage can
+  also be an incomplete HTTP 200 shell, session confirmation may perform at most three read-only
+  homepage GETs; those confirmation attempts must never replay username/password fields.
 
 ### 7. Wrong vs Correct
 
@@ -499,6 +502,75 @@ for step, point in enumerate(points, 1):
         await asyncio.sleep(max(1, round(remaining_ms)) / 1000)
 ```
 
+## Scenario: MineBBS XenForo Side-effect Confirmation
+
+### 1. Scope / Trigger
+
+- Trigger: submitting a MineBBS XenForo POST for sign-in, purchase, or card application, especially
+  through the sticky Chromium transport where `fetch()` follows redirects.
+
+### 2. Signatures
+
+- `MineBBSAdapter._submit(submission: _FormSubmission) -> str`
+- `MineBBSAdapter._json_submission_outcome(result: str) -> tuple[bool, bool | None]`
+- `MineBBSAdapter._confirm_purchase_in_inventory(item_key: str) -> bool`
+
+### 3. Contracts
+
+- Every XenForo POST includes `_xfResponseType=json` in the form body and
+  `X-Requested-With: XMLHttpRequest`; form values remain excluded from logs.
+- Browser-mode POST still has exactly one dispatch. An empty, redirected HTML, or otherwise opaque
+  response never causes a second POST.
+- The orchestrator reads inventory before purchase. The adapter retains that non-secret count as a
+  baseline. When the single purchase POST has no explicit success or failure result, one fresh
+  read-only inventory parse may prove success only when the purchased item count increased.
+- Explicit `success=false`, `error(s)`, or insufficient-resource markers take precedence and cannot
+  be converted to success by a later inventory read.
+- A missing baseline, unparseable inventory, or unchanged count remains `technical_failure`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|---|---|
+| JSON `status=ok` without errors | `success` |
+| JSON `success=false` or `error(s)` | Failure; do not perform inventory confirmation |
+| Opaque HTML after the one purchase POST and item count increased | `success`; continue to apply |
+| Opaque HTML and no baseline, parse failure, or unchanged count | `technical_failure`; never replay POST |
+| POST transport fails before or after dispatch | Stop the site through the transport contract; never replay |
+
+### 5. Good/Base/Bad Cases
+
+- Good: submit quantity `1` once, receive opaque redirected HTML, observe purple-card inventory move
+  from `0` to `1`, and report a confirmed purchase.
+- Base: receive XenForo `{"status":"ok"}` and report success without an inventory recheck.
+- Bad: retry the purchase because the first response was HTML, or treat an existing card as proof
+  without a cached pre-purchase baseline.
+
+### 6. Tests Required
+
+- Assert effective POST data contains `_xfResponseType=json` and the AJAX request header.
+- Assert an opaque response plus a cached `0 -> 1` inventory transition reports success with exactly
+  one POST.
+- Assert explicit JSON failure remains failure and does not invoke inventory confirmation.
+- Assert card application accepts the same error-free XenForo `status=ok` contract.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+if "success" not in response.text:
+    transport.post(action, data=form)  # duplicates an indeterminate purchase
+```
+
+#### Correct
+
+```python
+response = transport.post(action, data={**form, "_xfResponseType": "json"})
+if response_is_opaque:
+    purchased = fresh_inventory[item_key] > cached_inventory[item_key]
+```
+
 ## State and side effects
 
 State is versioned, atomic JSON containing only operational timestamps needed for cooldown and daily
@@ -512,7 +584,9 @@ path, a `quantity` field, and exactly one submit control. Localized button text 
 contract. The submitted quantity is forced to `1`; field names and counts may be logged, but field
 values may not. XenForo AJAX JSON accepts explicit `success=true` or an error-free `status` of
 `ok`/`success`/`completed`; explicit `success=false`, `error(s)`, and insufficient-resource markers
-take precedence over generic status text.
+take precedence over generic status text. POST bodies include `_xfResponseType=json`; if the one
+purchase POST still returns an opaque body, only a read-only inventory increase from the cached
+pre-purchase baseline can confirm success.
 
 KLPBBS ownership compares the authenticated Discuz UID discovered after login with the first post
 author UID encoded in `space-uid-<UID>.html` or `home.php?mod=space&uid=<UID>`. The configured login
@@ -548,9 +622,11 @@ complete allowlisted JSONL diagnostic stream.
 | KLPBBS promotion task page remains an unparseable shell after bounded retries | Return `skipped`, do not visit proxies, and continue the KLPBBS main flow |
 | KLPBBS task center is structurally complete but has no available task | Read the doing list before applying stable task ID 1 |
 | KLPBBS first two rank pages are incomplete HTTP 200 shells | Perform one final read-only primary-path attempt; fail closed if it is also incomplete |
+| KLPBBS login POST is followed by incomplete HTTP 200 home shells | Confirm with at most three read-only home GETs; never replay credentials |
 | MineBBS purchase page has one exact structural form without localized button text | Submit exactly quantity `1` once |
 | MineBBS purchase form is absent/ambiguous/cross-origin or lacks quantity/submit control | Raise `SiteParseError`; do not submit |
 | MineBBS AJAX response contains explicit failure plus a generic `status=ok` | Failure wins; never report purchase success |
+| MineBBS purchase POST returns opaque HTML | Compare one fresh inventory read with the cached baseline; never replay the POST |
 
 ## Required tests
 
@@ -563,9 +639,10 @@ workflow wiring, and promotion-click proxy isolation.
 
 MineBBS purchase regressions must use the live structural shape (`_xfToken`, `quantity`,
 `_xfRedirect`, textless submit button), assert exact same-origin selection and quantity `1`, cover
-ambiguous forms, and prove logged field names never expose values. KLPBBS regressions must cover a
-known empty task center, doing-list precedence, and primary/canonical/primary rank recovery. The
-quality gate is:
+ambiguous forms, JSON status handling, opaque-response inventory confirmation with exactly one POST,
+and prove logged field names never expose values. KLPBBS regressions must cover a known empty task
+center, doing-list precedence, primary/canonical/primary rank recovery, and one login POST followed
+by up to three read-only session-confirmation GETs. The quality gate is:
 
 ```text
 ruff format --check .

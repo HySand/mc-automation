@@ -33,6 +33,8 @@ captcha text, cookies, tokens, and raw authenticated HTML were not written to th
 | KLPBBS promotion shell isolation | Runs 30276801323 and 30278711461 both returned an unparseable task-center/doing shell after login and sign-in. The adapter now skips only the uncertain promotion action, never visits proxies without confirmed task state, and continues the KLPBBS rank/ownership/bump path | Pass in regression tests; next Actions run will verify the continued main flow |
 | MineBBS purchase form regression | Run 30288716582 cleared Cloudflare, logged in, signed in, verified ownership, and read inventory, then failed after GET `/tool-shop/18/purchase` and before any purchase POST. A local authenticated read-only probe found four forms; the unique purchase form is same-origin POST with `_xfToken`, `quantity`, `_xfRedirect`, and a textless submit button. The adapter now selects that structural contract, forces quantity `1`, and parses XenForo AJAX success/failure without logging values | Pass locally and in regression tests; Actions recheck pending |
 | KLPBBS bounded shell recovery | Run 30288716582 received unparseable task pages and two incomplete forum-list variants. A complete empty task center now causes a doing-list read before any stable-task apply, while rank uses at most primary/canonical/primary reads and still fails closed after three shells | Pass in 28 adapter tests; Actions recheck pending |
+| KLPBBS login shell recovery | Run 30317763371 submitted login once, then could not confirm the session from the first homepage shell. Authentication now performs up to three read-only homepage confirmations while proving the credential POST count remains exactly one | Pass in focused regression; Actions recheck pending |
+| MineBBS purchase outcome confirmation | Run 30317763371 selected the live purchase form and sent one POST, but Chromium `fetch()` returned HTTP 200 without a parseable success marker. XenForo POSTs now include `_xfResponseType=json`; an opaque purchase response is confirmed only by a fresh inventory increase from the cached pre-purchase baseline, never by replaying POST | Pass in focused regression; Actions recheck pending |
 
 Final gate:
 
@@ -40,7 +42,7 @@ Final gate:
 ruff format --check .: pass (34 files)
 ruff check .: pass
 mypy src: pass (18 source files)
-pytest: 185 passed; coverage 81%
+pytest: 188 passed; coverage 82%
 uv lock --check: pass
 Workflow YAML parse: pass
 secret scan: 0 matches
@@ -94,6 +96,51 @@ rejected held-only alternatives that isolated the missing pre-press pointer hist
 - [x] Updated `.trellis/spec/backend/site-automation-contracts.md`.
 - [x] Updated `.trellis/spec/guides/cross-layer-thinking-guide.md`.
 - [x] Added regression tests for bridge fallback and POST replay.
+- [x] Checked template synchronization; this repository has no `src/templates/markdown/spec/` tree.
+
+## Bug Analysis: XenForo purchase succeeded or redirected without a parseable result
+
+### 1. Root Cause Category
+
+- **Category**: B/D/E - Cross-layer contract, test coverage gap, and implicit assumption.
+- **Specific Cause**: The adapter sent the AJAX header but omitted XenForo's
+  `_xfResponseType=json` form field. Chromium `fetch()` follows redirects, so the one purchase POST
+  could return a normal HTML shop page even after the server processed it. The parser treated that
+  opaque response as a technical failure without checking the authoritative inventory state.
+
+### 2. Why Fixes Failed
+
+1. Structural form repair reached the POST boundary but only tested synthetic text and direct JSON
+   responses; it did not model a browser-followed redirect.
+2. Treating `X-Requested-With` as the complete XenForo response contract left the response format
+   dependent on server-side framework behavior.
+3. Stopping immediately on an opaque response preserved no-replay safety but discarded a safe,
+   read-only way to distinguish success from failure.
+
+### 3. Prevention Mechanisms
+
+| Priority | Mechanism | Specific Action | Status |
+|---|---|---|---|
+| P0 | Request contract | Add `_xfResponseType=json` to every MineBBS XenForo POST | DONE |
+| P0 | Side-effect safety | Keep exactly one POST and confirm opaque purchases from a cached inventory delta | DONE |
+| P0 | Test coverage | Regress opaque redirect HTML, `0 -> 1` inventory, and exactly one POST | DONE |
+| P1 | Same-layer consistency | Parse error-free XenForo `status=ok` for purchase, form sign-in, and card application | DONE |
+| P1 | Documentation | Record response-mode and before/after confirmation contracts in backend spec and cross-layer guide | DONE |
+
+### 4. Systematic Expansion
+
+- **Similar Issues**: Any framework form submitted through browser `fetch()` may follow a redirect
+  and hide the original side-effect response.
+- **Design Improvement**: The adapter owns both the framework-specific request fields and the
+  authoritative business-state confirmation; transport success alone is not business success.
+- **Process Improvement**: Side-effect fixtures must include direct JSON, explicit failure, and
+  opaque redirected response cases before enabling the operation in Actions.
+
+### 5. Knowledge Capture
+
+- [x] Updated `.trellis/spec/backend/site-automation-contracts.md` with the seven-section contract.
+- [x] Updated `.trellis/spec/guides/cross-layer-thinking-guide.md` with the confirmation checklist.
+- [x] Added MineBBS purchase and apply regressions plus KLPBBS credential no-replay coverage.
 - [x] Checked template synchronization; this repository has no `src/templates/markdown/spec/` tree.
 
 ## Bug Analysis: live site structure diverged from parser assumptions

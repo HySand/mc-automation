@@ -95,6 +95,36 @@ def test_authenticate_submits_current_formhash_and_verifies_session() -> None:
     assert adapter.authenticated_uid == "1"
 
 
+def test_authenticate_rechecks_empty_home_without_reposting_credentials(
+    monkeypatch: object,
+) -> None:
+    login_url = "https://example.test/member.php?mod=logging&action=login"
+    home_url = "https://example.test"
+    transport = FakeTransport(
+        {
+            login_url: '<input name="formhash" value="abc123">',
+            home_url: [
+                "<html>empty shell one</html>",
+                "<html>empty shell two</html>",
+                '<script>var discuz_uid = "1";</script>',
+            ],
+        }
+    )
+    monkeypatch.setattr("mc_automation.sites.klpbbs.time.sleep", lambda _seconds: None)  # type: ignore[attr-defined]
+    adapter = KLPBBSAdapter(config(), transport, base_url=home_url)
+
+    result = adapter.authenticate()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert len([call for call in transport.calls if call[0] == "POST"]) == 1
+    assert [call[1] for call in transport.calls if call[0] == "GET"] == [
+        login_url,
+        home_url,
+        home_url,
+        home_url,
+    ]
+
+
 def test_rank_uses_normal_thread_order_and_rejects_unknown_markup() -> None:
     forum_url = "https://example.test/forum-56-1.html"
     adapter = KLPBBSAdapter(

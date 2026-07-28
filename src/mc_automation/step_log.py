@@ -29,6 +29,7 @@ PHASE_LABELS = {
     "orchestration": "执行任务",
     "site_run": "站点任务",
     "authenticate": "登录",
+    "authentication_check": "登录状态检查",
     "daily_sign_in": "签到",
     "promotion": "推广任务",
     "promotion_proxy_source": "代理源",
@@ -38,6 +39,7 @@ PHASE_LABELS = {
     "ownership_check": "所有权检查",
     "inventory": "道具库存",
     "purchase_bump_item": "购买顶帖道具",
+    "purchase_confirmation": "确认购买结果",
     "apply_bump_item": "使用顶帖道具",
     "security_challenge": "安全验证",
     "challenge_resolution": "验证处理",
@@ -75,6 +77,7 @@ STATUS_LABELS = {
     "detected": "检测到",
     "observed": "已读取",
     "received": "已收到",
+    "retrying": "重试中",
     "info": "信息",
 }
 
@@ -160,6 +163,7 @@ ALLOWED_METADATA_KEYS = frozenset(
         "initial_count",
         "marker_names",
         "inventory_total",
+        "inventory_confirmed",
         "item_types",
         "json_response",
         "link_count",
@@ -249,11 +253,16 @@ def _safe_value(key: str, value: object) -> SafeValue:
 def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
     preferred = (
         ("action", "操作", ""),
+        ("attempt", "第", " 次"),
+        ("max_attempts", "最多", " 次"),
         ("form_count", "表单数", ""),
         ("control_count", "候选控件", ""),
         ("field_count", "字段数", ""),
         ("field_names", "字段", ""),
         ("submit_method", "提交方式", ""),
+        ("content_length", "内容字节", ""),
+        ("inventory_confirmed", "库存已确认", ""),
+        ("resolved", "已确认", ""),
         ("progress_percent", "进度", "%"),
         ("proxy_successes", "有效访问", ""),
         ("attempts", "已尝试", ""),

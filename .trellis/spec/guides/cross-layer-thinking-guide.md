@@ -124,6 +124,10 @@ After implementation:
       and unique submit control instead of localized button text
 - [ ] For response payloads, made explicit failure fields and business-error markers override a
       generic transport/status success marker
+- [ ] For browser-submitted framework forms, included the framework's standard response-mode fields
+      instead of assuming an AJAX header alone guarantees a machine-readable response
+- [ ] When a single side-effecting POST returns an opaque result, used a cached before-state plus one
+      read-only after-state to confirm change; never retried the POST or treated after-state alone as proof
 - [ ] Checked that consumers import shared decoders / projections instead of
       casting payload fields locally
 - [ ] Checked that derived state points back to the source event identifier

@@ -496,10 +496,24 @@ class KLPBBSAdapter:
         self.transport.post(
             self._url("member.php?mod=logging&action=login&loginsubmit=yes"), data=data
         )
-        home = self.transport.get(self.base_url)
-        if self._is_authenticated(home.text):
-            self.authenticated_uid = self._authenticated_uid(home.text)
-            return self._result("authenticate", ActionStatus.SUCCESS, "登录成功")
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            home = self.transport.get(self.base_url)
+            authenticated = self._is_authenticated(home.text)
+            log_step(
+                "authentication_check",
+                site=self.name,
+                status="completed" if authenticated else "retrying",
+                attempt=attempt,
+                max_attempts=max_attempts,
+                content_length=len(home.text.encode("utf-8")),
+                resolved=authenticated,
+            )
+            if authenticated:
+                self.authenticated_uid = self._authenticated_uid(home.text)
+                return self._result("authenticate", ActionStatus.SUCCESS, "登录成功")
+            if attempt < max_attempts:
+                time.sleep(1)
         return self._result(
             "authenticate", ActionStatus.MANUAL_INTERVENTION, "登录失败或需要人工验证"
         )
