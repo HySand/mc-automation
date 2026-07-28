@@ -120,6 +120,8 @@ After implementation:
       identity—not only cookies and User-Agent—still satisfies the upstream security contract
 - [ ] For side-effecting requests, distinguished "proven not sent" from "possibly sent" and allowed
       retries only in the former state
+- [ ] For rejected side effects, required a narrow authoritative rejection reason before retrying;
+      an unchanged read-only state alone does not prove that replay is safe
 - [ ] For external HTML forms, identified the action by origin, path, method, required field set,
       and unique submit control instead of localized button text
 - [ ] Traced multi-stage server workflows through each authoritative state transition (for example,

@@ -21,6 +21,15 @@ LIKE_LABELS = ("点我喜欢", "点赞", "喜欢", "like")
 ALREADY_LIKED = ("已喜欢", "已经喜欢", "已点赞", "already liked")
 SUCCESS_MARKERS = ("喜欢成功", "点赞成功", "感谢", "success", "liked")
 CAPTCHA_CODE_PATTERN = re.compile(r"^[A-Za-z0-9]{3,8}$")
+CAPTCHA_REJECTION_MARKERS = (
+    "验证码错误",
+    "验证码不正确",
+    "验证码有误",
+    "验证码已过期",
+    "invalid captcha",
+    "incorrect captcha",
+)
+WDSJFWQ_CAPTCHA_ATTEMPTS = 3
 
 
 class CaptchaSolver(Protocol):
@@ -65,6 +74,23 @@ class LikeAdapter:
         return any(label.casefold() in normalized for label in LIKE_LABELS) and not any(
             marker.casefold() in normalized for marker in ALREADY_LIKED + ("取消喜欢", "unlike")
         )
+
+    def _like_forms(self, soup: BeautifulSoup) -> list[Tag]:
+        return [
+            form
+            for form in soup.select("form")
+            if any(
+                self._matches_like(
+                    control.get_text(" ", strip=True) or str(control.get("value", ""))
+                )
+                for control in form.select("button, input[type=submit], input[type=button]")
+            )
+        ]
+
+    @staticmethod
+    def _captcha_rejected(response: requests.Response) -> bool:
+        text = BeautifulSoup(response.text, "html.parser").get_text(" ", strip=True).casefold()
+        return any(marker.casefold() in text for marker in CAPTCHA_REJECTION_MARKERS)
 
     def _url(self, value: str) -> str:
         return urljoin(self.url, value)
@@ -266,6 +292,35 @@ class LikeAdapter:
         data[str(captcha_field["name"])] = code
         return self._submit_form(form, data)
 
+    def _solve_wdsjfwq_with_retries(
+        self, soup: BeautifulSoup, form: Tag
+    ) -> requests.Response | None:
+        current_soup = soup
+        current_form = form
+        for attempt in range(1, WDSJFWQ_CAPTCHA_ATTEMPTS + 1):
+            response = self._solve_wdsjfwq_form(current_soup, current_form)
+            if response is None:
+                return None
+            rejected = self._captcha_rejected(response)
+            log_step(
+                "captcha_attempt",
+                site=self.name,
+                status="failed" if rejected else "completed",
+                attempt=attempt,
+                max_attempts=WDSJFWQ_CAPTCHA_ATTEMPTS,
+                resolved=not rejected,
+            )
+            if not rejected or attempt == WDSJFWQ_CAPTCHA_ATTEMPTS:
+                return response
+
+            retry_page = self.transport.get(self.url)
+            current_soup = BeautifulSoup(retry_page.text, "html.parser")
+            retry_forms = self._like_forms(current_soup)
+            if len(retry_forms) != 1 or not self._requires_interaction(retry_forms[0]):
+                return response
+            current_form = retry_forms[0]
+        return None
+
     def run_one_shot_action(self) -> ActionResult:
         log_step("site_action", site=self.name, status="started", action="like", url=self.url)
         log_step("page_fetch", site=self.name, status="started", url=self.url)
@@ -292,16 +347,7 @@ class LikeAdapter:
             if self._matches_like(anchor.get_text(" ", strip=True))
             and not self._is_self_link(str(anchor["href"]))
         ]
-        forms = [
-            form
-            for form in soup.select("form")
-            if any(
-                self._matches_like(
-                    control.get_text(" ", strip=True) or str(control.get("value", ""))
-                )
-                for control in form.select("button, input[type=submit], input[type=button]")
-            )
-        ]
+        forms = self._like_forms(soup)
         mclists_button = self._mclists_button(soup)
         control_count = len(links) + len(forms) + int(mclists_button is not None)
         control_kind = (
@@ -357,7 +403,7 @@ class LikeAdapter:
                 field_count=len(form.select("input[name]")),
             )
             if requires_interaction:
-                solved_response = self._solve_wdsjfwq_form(soup, form)
+                solved_response = self._solve_wdsjfwq_with_retries(soup, form)
                 if solved_response is None:
                     return self._result(
                         ActionStatus.MANUAL_INTERVENTION,

@@ -150,8 +150,11 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   read, and selected 5xx failures; never automatically replay POST.
 - Run every response through `CloudflareWafGuard`; `cloudscraper` success does not bypass the
   application's challenge classification or bounded browser-resolution policy.
-- Authentication first performs one read-only login-page GET, then submits exactly
-  `{"username": username, "password": password}` to
+- The KLPBBS CloudScraper matches the known-working reference session: Windows Chrome browser
+  profile, fixed Edge 116 User-Agent, and `LWPCookieJar`. `HttpTransport` must preserve that
+  User-Agent and the scraper's TLS adapter.
+- Authentication submits exactly `{"username": username, "password": password}` without a
+  preliminary login-page GET to
   `member.php?mod=logging&action=login&loginsubmit=yes` with same-origin `Origin` and homepage
   `Referer` headers. Do not add `formhash`, `loginfield`, `questionid`, `cookietime`, or other
   browser-form fields unless a new live probe proves they are required.
@@ -196,6 +199,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   homepage GETs; those confirmation attempts must never replay username/password fields.
 - Assert the login payload has exactly `username` and `password`, plus same-origin `Origin` and
   homepage `Referer` headers.
+- Assert the reference User-Agent and `LWPCookieJar` survive `HttpTransport` construction, and no
+  login-page GET occurs before the credential POST.
 
 ### 7. Wrong vs Correct
 
@@ -267,6 +272,10 @@ else:
 - WDSJFWQ accepts only 3-8 alphanumeric captcha characters, fills exactly one username field with a
   generated `PlayerNNNNNN`, includes the unique named like-submit button as a browser would, and
   submits the discovered form once.
+- If and only if the response explicitly says the CAPTCHA is wrong, invalid, or expired, the
+  adapter may refresh the vote page and dynamic image and repeat recognition/submission, for at
+  most three total CAPTCHA submissions. An unchanged count, opaque response, transport failure, or
+  any other unclassified result never authorizes a POST replay.
 - WDSJFWQ may answer a processed form with an opaque HTTP 302 body and no success message. The
   adapter records the unambiguous public like count before submission and accepts the result only if
   the response body or one fresh read-only GET shows a strictly larger, internally consistent count.
@@ -280,6 +289,8 @@ else:
 | WDSJFWQ code empty or non-alphanumeric | `manual_intervention`; no POST |
 | WDSJFWQ captcha image cannot be located | `manual_intervention`; no POST |
 | Challenged POST | Resolver is not invoked; POST is never replayed |
+| Explicit CAPTCHA rejection response | Refresh page and image; retry up to three total submissions |
+| Opaque/unknown response or unchanged count without explicit CAPTCHA rejection | Stop with `technical_failure`; do not replay POST |
 
 ### 5. Good/Base/Bad Cases
 
@@ -294,6 +305,8 @@ else:
   auth without logging the secret.
 - Assert WDSJFWQ successful solver path downloads the image and submits username/captcha data.
 - Assert invalid WDSJFWQ model output returns `manual_intervention` without POST.
+- Assert one explicit CAPTCHA rejection causes one fresh page/image read and second POST, while an
+  opaque unchanged response still performs exactly one POST.
 
 ### 7. Wrong vs Correct
 

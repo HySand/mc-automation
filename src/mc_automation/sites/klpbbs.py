@@ -480,7 +480,6 @@ class KLPBBSAdapter:
         return None
 
     def authenticate(self) -> ActionResult:
-        self.transport.get(self._url("member.php?mod=logging&action=login"))
         data = {
             "username": self.config.username,
             "password": self.config.password,

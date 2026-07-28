@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.cookiejar
 import time
 from typing import Any, Protocol, cast
 
@@ -9,6 +10,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .step_log import log_step
+
+KLPBBS_REFERENCE_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.81"
+)
 
 
 class TransportError(RuntimeError):
@@ -33,7 +39,15 @@ class ChallengeResolver(Protocol):
 
 
 def create_cloudscraper_session() -> requests.Session:
-    return cast(requests.Session, cloudscraper.create_scraper())
+    session = cast(
+        requests.Session,
+        cloudscraper.create_scraper(
+            browser={"browser": "chrome", "platform": "windows", "mobile": False}
+        ),
+    )
+    session.cookies = cast(Any, http.cookiejar.LWPCookieJar())
+    session.headers["User-Agent"] = KLPBBS_REFERENCE_USER_AGENT
+    return session
 
 
 class HttpTransport:

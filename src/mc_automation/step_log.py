@@ -63,6 +63,7 @@ PHASE_LABELS = {
     "captcha_form_inspection": "检查验证码表单",
     "captcha_image": "获取验证码图片",
     "captcha_recognition": "验证码识别",
+    "captcha_attempt": "验证码提交尝试",
     "captcha_solution": "验证码结果",
     "ai_request": "AI 识别请求",
     "ai_response": "AI 识别响应",

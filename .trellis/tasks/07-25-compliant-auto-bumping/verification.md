@@ -144,6 +144,20 @@ rejected held-only alternatives that isolated the missing pre-press pointer hist
 - [x] Added checkout and dynamic configure regressions; full suite passes with 82% coverage.
 - [x] Verified `.env` remains ignored/untracked and secret-pattern scan reports zero matches.
 
+## Live Run 30322744969 Follow-up
+
+- KLPBBS sent the two-field payload but did not establish a session. Source comparison found two
+  remaining differences: the implementation performed an extra login-page GET and did not pin the
+  reference project's Windows browser profile, fixed Edge 116 User-Agent, and `LWPCookieJar`.
+- WDSJFWQ successfully fetched a dynamic image, received HTTP 200 from the configured vision model,
+  and submitted one complete form, but the public count remained `56`. The adapter now retries only
+  when the response explicitly classifies the CAPTCHA as wrong/invalid/expired; it refreshes both
+  page and image before each retry and keeps unknown responses single-POST.
+- MineBBS received a Cloudflare managed challenge rather than ESA. All three independent browser
+  attempts found and clicked one DOM-derived Turnstile candidate but the challenge remained. No
+  purchase/deployment POST occurred, preserving the fail-closed contract.
+- MCLists completed independently, confirming that one adapter failure does not block the others.
+
 ## Bug Analysis: XenForo purchase succeeded or redirected without a parseable result
 
 ### 1. Root Cause Category

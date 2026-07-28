@@ -9,7 +9,12 @@ import responses
 from requests.adapters import HTTPAdapter
 
 from mc_automation.step_log import LOGGER_NAME
-from mc_automation.transport import HttpTransport, SecurityChallenge, create_cloudscraper_session
+from mc_automation.transport import (
+    KLPBBS_REFERENCE_USER_AGENT,
+    HttpTransport,
+    SecurityChallenge,
+    create_cloudscraper_session,
+)
 
 
 class FakeChallengeResolver:
@@ -94,6 +99,8 @@ def test_cloudscraper_session_is_usable_by_transport() -> None:
     transport = HttpTransport(session=session)
 
     assert transport.session.headers["User-Agent"] == user_agent
+    assert user_agent == KLPBBS_REFERENCE_USER_AGENT
+    assert type(session.cookies).__name__ == "LWPCookieJar"
     assert type(transport.session.get_adapter("https://")) is type(adapter)
     assert transport.session.get_adapter("https://").max_retries.total == 2
     assert type(adapter) is not HTTPAdapter

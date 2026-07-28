@@ -75,9 +75,6 @@ def test_adapter_has_no_forum_reply_api() -> None:
 def test_authenticate_submits_reference_payload_and_verifies_session() -> None:
     transport = FakeTransport(
         {
-            "https://example.test/member.php?mod=logging&action=login": (
-                '<input name="formhash" value="abc123">'
-            ),
             "https://example.test": (
                 '<script>var discuz_uid = "1";</script>'
                 '<a href="member.php?mod=logging&action=logout">退出登录</a>'
@@ -102,11 +99,9 @@ def test_authenticate_submits_reference_payload_and_verifies_session() -> None:
 def test_authenticate_rechecks_empty_home_without_reposting_credentials(
     monkeypatch: object,
 ) -> None:
-    login_url = "https://example.test/member.php?mod=logging&action=login"
     home_url = "https://example.test"
     transport = FakeTransport(
         {
-            login_url: '<input name="formhash" value="abc123">',
             home_url: [
                 "<html>empty shell one</html>",
                 "<html>empty shell two</html>",
@@ -122,7 +117,6 @@ def test_authenticate_rechecks_empty_home_without_reposting_credentials(
     assert result.status is ActionStatus.SUCCESS
     assert len([call for call in transport.calls if call[0] == "POST"]) == 1
     assert [call[1] for call in transport.calls if call[0] == "GET"] == [
-        login_url,
         home_url,
         home_url,
         home_url,

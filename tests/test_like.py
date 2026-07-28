@@ -223,6 +223,31 @@ def test_wdsjfwq_adapter_solves_captcha_and_submits_random_username() -> None:
     )
 
 
+def test_wdsjfwq_retries_only_after_explicit_captcha_rejection() -> None:
+    page = "https://example.test/server-1991/vote.html"
+    captcha = "https://example.test/captcha.png"
+    page_html = (
+        '<form action="/server-1991/vote.html" method="post">'
+        '<input type="text" name="username"><input type="text" name="captcha">'
+        '<img src="/captcha.png" alt="验证码">'
+        '<button type="submit" name="submit">点赞</button></form>'
+    )
+    solver = FakeCaptchaSolver("A1234")
+    site, transport = adapter(
+        {page: page_html, captcha: StubResponse("", content=b"dynamic-captcha")},
+        ["验证码错误，请重试", "点赞成功"],
+        name="wdsjfwq",
+        url=page,
+        captcha_solver=solver,
+    )
+
+    result = site.run_one_shot_action()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert len(solver.images) == 2
+    assert [call[0] for call in transport.calls] == ["GET", "GET", "POST", "GET", "GET", "POST"]
+
+
 def test_wdsjfwq_logs_captcha_pipeline_without_values(
     caplog: object,
     monkeypatch: object,
