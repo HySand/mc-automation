@@ -29,6 +29,7 @@ PHASE_LABELS = {
     "orchestration": "执行任务",
     "site_run": "站点任务",
     "authenticate": "登录",
+    "authentication_submit": "登录提交",
     "authentication_check": "登录状态检查",
     "daily_sign_in": "签到",
     "promotion": "推广任务",
@@ -55,6 +56,7 @@ PHASE_LABELS = {
     "esa_fetch_response": "Chromium 同源请求",
     "turnstile_interaction": "Cloudflare 人机验证",
     "site_action": "站点操作",
+    "http_response": "HTTP 响应",
     "page_fetch": "读取页面",
     "like_count": "点赞数",
     "like_count_refresh": "复查点赞数",
@@ -121,7 +123,6 @@ PAGE_CLASS_LABELS = {
 QUIET_HUMAN_PHASES = frozenset(
     {
         "http_request",
-        "http_response",
         "promotion_proxy_visit_failed",
     }
 )
@@ -260,6 +261,8 @@ def _safe_value(key: str, value: object) -> SafeValue:
 def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
     preferred = (
         ("action", "操作", ""),
+        ("method", "方法", ""),
+        ("url", "地址", ""),
         ("attempt", "第", " 次"),
         ("max_attempts", "最多", " 次"),
         ("form_count", "表单数", ""),
@@ -279,6 +282,8 @@ def _human_metadata(metadata: Mapping[str, SafeValue]) -> str:
         ("threshold", "阈值", ""),
         ("result_status", "结果", ""),
         ("status_code", "HTTP", ""),
+        ("redirect_count", "重定向", " 次"),
+        ("cookie_count", "Cookie", " 个"),
         ("exception_type", "错误", ""),
         ("exit_code", "退出码", ""),
         ("challenge_kind", "验证类型", ""),

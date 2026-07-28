@@ -66,3 +66,29 @@ def test_step_log_defaults_to_human_readable_and_hides_failed_proxy_noise(
     assert caplog.records[0].message == (  # type: ignore[attr-defined]
         "[KLPBBS] 推广进度：完成 | 进度 30% | 有效访问 3 | 已尝试 40"
     )
+
+
+def test_human_log_shows_safe_http_response_diagnostics(
+    caplog: object, monkeypatch: object
+) -> None:
+    monkeypatch.delenv("MC_AUTOMATION_LOG_FORMAT", raising=False)  # type: ignore[attr-defined]
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)  # type: ignore[attr-defined]
+
+    log_step(
+        "http_response",
+        site="klpbbs",
+        status="completed",
+        method="POST",
+        url="https://user:password@klpbbs.com/login?token=secret",
+        status_code=552,
+        redirect_count=0,
+        cookie_count=2,
+    )
+
+    output = caplog.records[-1].message  # type: ignore[attr-defined]
+    assert output == (
+        "[KLPBBS] HTTP 响应：完成 | 方法 POST | 地址 https://klpbbs.com/login"
+        " | HTTP 552 | 重定向 0 次 | Cookie 2 个"
+    )
+    assert "password" not in output
+    assert "token=secret" not in output

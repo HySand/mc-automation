@@ -141,13 +141,18 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 
 - `create_cloudscraper_session() -> requests.Session`
 - `HttpTransport(session=create_cloudscraper_session(), challenge_resolver=resolver)`
+- `HttpStatusError(status_code: int)`, a `TransportError` carrying the final HTTP status.
 
 ### 3. Contracts
 
 - Dependency: `cloudscraper>=1.2.71`; do not substitute the unrelated `cfscraper` package.
 - Preserve the CloudScraper-generated User-Agent and `CipherSuiteAdapter`.
 - Apply the existing retry policy to the preserved adapter: two retries for GET/HEAD connection,
-  read, and selected 5xx failures; never automatically replay POST.
+  read, and selected 5xx failures, including Cloudflare 520-527 and observed 552 gateway responses;
+  never automatically replay POST.
+- After challenge classification, every final HTTP status at least 400 raises `HttpStatusError`.
+  A 5xx response is a technical server/transport failure and must never fall through to an HTML
+  parser or be reported as an authentication/manual-intervention result.
 - Run every response through `CloudflareWafGuard`; `cloudscraper` success does not bypass the
   application's challenge classification or bounded browser-resolution policy.
 - The KLPBBS CloudScraper matches the known-working reference session: Windows Chrome browser
@@ -158,6 +163,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   `member.php?mod=logging&action=login&loginsubmit=yes` with same-origin `Origin` and homepage
   `Referer` headers. Do not add `formhash`, `loginfield`, `questionid`, `cookietime`, or other
   browser-form fields unless a new live probe proves they are required.
+- Match the reference session after login: keep `Origin` and `Referer` in the session headers and
+  serialize the resulting `LWPCookieJar` into the persistent `Cookie` header before confirmation
+  GETs. Logs expose only status, redirect count, response size, and cookie count, never cookie names
+  or values.
 
 ### 4. Validation & Error Matrix
 
@@ -165,6 +174,8 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 |---|---|
 | KLPBBS normal page with passive `/challenge-platform/scripts/jsd/` telemetry | Parse normally |
 | Explicit `cf-chl-`, CAPTCHA, 401, 403, or 429 remains | Raise `SecurityChallenge` |
+| Final login POST or confirmation GET is HTTP 5xx, including 552 | Raise `HttpStatusError`; orchestrator reports `technical_failure` |
+| Final non-challenge HTTP 4xx | Raise `HttpStatusError`; do not parse the body |
 | Session adapter is not an `HTTPAdapter` subclass | Raise `TypeError` during construction |
 | `cfscraper` requests a `gb-dl` license or recurses | Dependency is forbidden; do not invoke it |
 | Login POST completes but three read-only homepage checks cannot prove a non-zero Discuz UID | `manual_intervention`; do not continue account actions or replay credentials |
@@ -175,7 +186,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Base: MineBBS/WDSJFWQ/MCLISTS get ordinary `requests.Session` transports.
 - Bad: install `cloudscraper` but then replace its TLS adapter with a plain `HTTPAdapter`.
 - Good authentication: send the reference implementation's two-field payload once, then confirm
-  the session from a fresh homepage GET.
+  the session from a fresh homepage GET with persistent origin/referer/cookie headers.
+- Base: an HTTP 200 shell without a Discuz UID receives up to three read-only confirmation checks.
+- Bad: interpret a 552 response body as an unauthenticated HTML page and return
+  `manual_intervention`.
 - Bad authentication: guess extra Discuz form fields or resend credentials when confirmation HTML
   is an incomplete HTTP 200 shell.
 
@@ -201,6 +215,11 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
   homepage `Referer` headers.
 - Assert the reference User-Agent and `LWPCookieJar` survive `HttpTransport` construction, and no
   login-page GET occurs before the credential POST.
+- Assert a 552 POST raises `HttpStatusError(status_code=552)` after exactly one request.
+- Assert login diagnostics include numeric status/redirect/cookie counts while sentinel cookie
+  values never occur in JSONL or human-readable output.
+- Assert persistent session headers contain same-origin `Origin`, homepage `Referer`, and the
+  serialized post-login Cookie header before confirmation GETs.
 
 ### 7. Wrong vs Correct
 
@@ -227,6 +246,21 @@ data = {"username": username, "password": password, "formhash": formhash, "cooki
 ```python
 data = {"username": username, "password": password}
 headers = {"Origin": base_url, "Referer": f"{base_url}/"}
+```
+
+#### Wrong: parse an unsuccessful response as login HTML
+
+```python
+response = session.post(login_url, data=data)
+return parse_login(response.text)
+```
+
+#### Correct: classify the final status before parsing
+
+```python
+response = session.post(login_url, data=data)
+if response.status_code >= 400:
+    raise HttpStatusError(response.status_code)
 ```
 
 #### Wrong: treat two HTTP 200 shells as a rank result

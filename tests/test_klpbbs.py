@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
+import requests
 
 from mc_automation.config import SiteConfig
 from mc_automation.models import ActionStatus
@@ -15,6 +16,12 @@ from mc_automation.sites.klpbbs import KLPBBSAdapter
 @dataclass
 class StubResponse:
     text: str
+    status_code: int = 200
+    history: tuple[object, ...] = ()
+
+    @property
+    def content(self) -> bytes:
+        return self.text.encode("utf-8")
 
 
 class FakeTransport:
@@ -22,6 +29,7 @@ class FakeTransport:
         self.pages = pages
         self.posts = list(posts or [])
         self.calls: list[tuple[str, str, dict[str, Any]]] = []
+        self.session = requests.Session()
 
     def get(self, url: str, **kwargs: Any) -> StubResponse:
         self.calls.append(("GET", url, kwargs))
@@ -94,6 +102,27 @@ def test_authenticate_submits_reference_payload_and_verifies_session() -> None:
     }
     assert post[2]["data"]["username"] == "owner"
     assert adapter.authenticated_uid == "1"
+    assert transport.session.headers["Origin"] == "https://example.test"
+    assert transport.session.headers["Referer"] == "https://example.test/"
+
+
+def test_authenticate_persists_cookie_header_without_logging_values(
+    caplog: object, monkeypatch: object
+) -> None:
+    monkeypatch.setenv("MC_AUTOMATION_LOG_FORMAT", "json")  # type: ignore[attr-defined]
+    caplog.set_level("INFO", logger="mc_automation.steps")  # type: ignore[attr-defined]
+    transport = FakeTransport({"https://example.test": '<script>var discuz_uid = "1";</script>'})
+    transport.session.cookies.set("auth", "do-not-log")
+    adapter = KLPBBSAdapter(config(), transport, base_url="https://example.test")
+
+    result = adapter.authenticate()
+
+    assert result.status is ActionStatus.SUCCESS
+    assert transport.session.headers["Cookie"] == "auth=do-not-log"
+    output = "\n".join(record.message for record in caplog.records)  # type: ignore[attr-defined]
+    assert '"status_code":200' in output
+    assert '"cookie_count":1' in output
+    assert "do-not-log" not in output
 
 
 def test_authenticate_rechecks_empty_home_without_reposting_credentials(

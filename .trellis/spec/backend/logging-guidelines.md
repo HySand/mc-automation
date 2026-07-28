@@ -19,6 +19,9 @@
   type.
 - HTTP: method, sanitized URL, response status, content type/length, duration, redirect count and
   sanitized target, challenge classification/resolution, and bounded network failure type.
+- Human-readable mode suppresses request-start noise but prints every HTTP response with method,
+  sanitized URL, numeric status, redirect count, and cookie count. This diagnostic must remain
+  visible so gateway statuses such as 552 cannot be confused with parser/authentication failures.
 - WDSJFWQ: page/control/form discovery, initial/response/refreshed public count, captcha image byte
   count/type, model attempt/status/duration, confidence/code length/shape validity, form field names,
   response classification, and final result.

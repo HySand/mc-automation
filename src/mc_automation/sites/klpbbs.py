@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
+from http.cookiejar import Cookie
+from typing import cast
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from bs4 import BeautifulSoup, Tag
@@ -480,14 +483,30 @@ class KLPBBSAdapter:
         return None
 
     def authenticate(self) -> ActionResult:
+        session_headers = self.transport.session.headers
+        session_headers.update({"Origin": self.base_url, "Referer": f"{self.base_url}/"})
         data = {
             "username": self.config.username,
             "password": self.config.password,
         }
-        self.transport.post(
+        login_response = self.transport.post(
             self._url("member.php?mod=logging&action=login&loginsubmit=yes"),
             data=data,
             headers={"Origin": self.base_url, "Referer": f"{self.base_url}/"},
+        )
+        cookies = list(cast(Iterable[Cookie], self.transport.session.cookies))
+        if cookies:
+            session_headers["Cookie"] = "; ".join(
+                f"{cookie.name}={cookie.value}" for cookie in cookies
+            )
+        log_step(
+            "authentication_submit",
+            site=self.name,
+            status="completed",
+            status_code=login_response.status_code,
+            content_length=len(login_response.content),
+            redirect_count=len(login_response.history),
+            cookie_count=len(cookies),
         )
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
@@ -499,7 +518,10 @@ class KLPBBSAdapter:
                 status="completed" if authenticated else "retrying",
                 attempt=attempt,
                 max_attempts=max_attempts,
+                status_code=home.status_code,
                 content_length=len(home.text.encode("utf-8")),
+                redirect_count=len(home.history),
+                cookie_count=len(self.transport.session.cookies),
                 resolved=authenticated,
             )
             if authenticated:

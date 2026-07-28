@@ -98,6 +98,17 @@ rejected held-only alternatives that isolated the missing pre-press pointer hist
 - [x] Added regression tests for bridge fallback and POST replay.
 - [x] Checked template synchronization; this repository has no `src/templates/markdown/spec/` tree.
 
+## Verification: HTTP status classification and KLPBBS login diagnostics
+
+- [x] Final HTTP `4xx/5xx` responses raise `HttpStatusError` before HTML parsing; HTTP 552 is
+  classified as a server-side technical failure and a credential-bearing POST is never replayed.
+- [x] Human logs expose method, sanitized URL, status, redirect count, and cookie count without
+  response bodies, query values, cookie names, or cookie values.
+- [x] KLPBBS keeps the reference `Origin`, `Referer`, and serialized post-login Cookie session
+  headers for the read-only authentication confirmation requests.
+- [x] `ruff format --check .`, `ruff check .`, and `mypy src` passed.
+- [x] Full suite passed: `197 passed`, total coverage `82%`.
+
 ## Bug Analysis: MineBBS stopped at cart insertion and never deployed the purchased card
 
 ### 1. Root Cause Category

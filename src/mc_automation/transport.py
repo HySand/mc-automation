@@ -21,6 +21,13 @@ class TransportError(RuntimeError):
     pass
 
 
+class HttpStatusError(TransportError):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        category = "server" if status_code >= 500 else "client"
+        super().__init__(f"HTTP {status_code} {category} error")
+
+
 class SecurityChallenge(TransportError):
     pass
 
@@ -81,7 +88,7 @@ class HttpTransport:
             read=2,
             status=2,
             backoff_factor=0.75,
-            status_forcelist=(500, 502, 503, 504),
+            status_forcelist=(500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 552),
             allowed_methods=frozenset({"GET", "HEAD"}),
             raise_on_status=False,
         )
@@ -138,6 +145,7 @@ class HttpTransport:
                 elapsed_ms=round((time.monotonic() - started) * 1000),
                 redirect_count=len(response.history),
                 redirect_target=response.url,
+                cookie_count=len(self.session.cookies),
             )
 
             info = self.cf_waf_guard.inspect(response)
@@ -205,6 +213,8 @@ class HttpTransport:
                     if resolved:
                         continue
                 raise self.cf_waf_guard.failure(info)
+            if response.status_code >= 400:
+                raise HttpStatusError(response.status_code)
             return response
 
     def _browser_request(

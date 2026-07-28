@@ -11,6 +11,7 @@ from requests.adapters import HTTPAdapter
 from mc_automation.step_log import LOGGER_NAME
 from mc_automation.transport import (
     KLPBBS_REFERENCE_USER_AGENT,
+    HttpStatusError,
     HttpTransport,
     SecurityChallenge,
     create_cloudscraper_session,
@@ -69,6 +70,17 @@ def test_transport_rejects_challenge_before_parser_sees_it() -> None:
 def test_transport_returns_normal_page() -> None:
     responses.get("https://example.test/", body="ok", status=200)
     assert HttpTransport(session=requests.Session()).get("https://example.test/").text == "ok"
+
+
+@responses.activate
+def test_transport_classifies_552_as_server_error_without_replaying_post() -> None:
+    responses.post("https://example.test/login", body="gateway failed", status=552)
+
+    with pytest.raises(HttpStatusError, match="HTTP 552 server error") as error:
+        HttpTransport(session=requests.Session()).post("https://example.test/login")
+
+    assert error.value.status_code == 552
+    assert len(responses.calls) == 1
 
 
 @responses.activate
