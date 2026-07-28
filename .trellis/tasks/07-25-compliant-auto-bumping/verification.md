@@ -98,6 +98,52 @@ rejected held-only alternatives that isolated the missing pre-press pointer hist
 - [x] Added regression tests for bridge fallback and POST replay.
 - [x] Checked template synchronization; this repository has no `src/templates/markdown/spec/` tree.
 
+## Bug Analysis: MineBBS stopped at cart insertion and never deployed the purchased card
+
+### 1. Root Cause Category
+
+- **Category**: B/D/E - Cross-layer workflow contract, test coverage gap, and implicit assumption.
+- **Specific Cause**: `/tool-shop/18/purchase` only inserts a card into the XenForo cart. The old
+  adapter treated that response as the purchase result, and its application parser expected a
+  synthetic inventory-page use form instead of the live dynamic configure overlay. Checkout also
+  inherited both `delete` and `purchase` submit controls from the same form.
+
+### 2. Why Fixes Failed
+
+1. Earlier tests ended at the first POST and never traced cart insertion through checkout.
+2. Synthetic inventory fixtures represented a direct use form, so the live `.itemList-item` and
+   `/tool-shop/inventory/<id>/configure` contract was absent from regression coverage.
+3. Generic hidden-field extraction modeled all named buttons as simultaneous values, while a real
+   browser submits only the activated submit control.
+4. Bare XenForo `status=ok` was confused with business completion even when inventory was unchanged.
+
+### 3. Prevention Mechanisms
+
+| Priority | Mechanism | Specific Action | Status |
+|---|---|---|---|
+| P0 | Workflow | Separate add-to-cart, checkout, inventory, configure, and deployment states | DONE |
+| P0 | Submission safety | Force target quantity `1`; submit only its cart key and `purchase`, never `delete` | DONE |
+| P0 | Deployment | Discover one dynamic configure overlay and submit `code[contentid]` once | DONE |
+| P0 | Result safety | Require explicit business success or authoritative inventory delta; reject bare `status=ok` | DONE |
+| P0 | Tests | Regress live item/cart shapes, dynamic IDs, ambiguity, unchanged state, and POST counts | DONE |
+| P1 | Authentication | Match KLPBBS's known-working two-field reference login payload and headers | DONE |
+
+### 4. Systematic Expansion
+
+- **Similar Issues**: Any external form with multiple submit buttons or intermediate workflow pages
+  can produce the same false success or wrong operation.
+- **Design Improvement**: Model server workflows as state transitions and prove every side effect at
+  the next authoritative read boundary.
+- **Process Improvement**: Live acceptance must inspect the request sequence and final account state,
+  not only an HTTP 200/JSON status or elapsed workflow completion.
+
+### 5. Knowledge Capture
+
+- [x] Updated `.trellis/spec/backend/site-automation-contracts.md` with the seven-section contract.
+- [x] Updated `.trellis/spec/guides/cross-layer-thinking-guide.md` with multi-stage form checks.
+- [x] Added checkout and dynamic configure regressions; full suite passes with 82% coverage.
+- [x] Verified `.env` remains ignored/untracked and secret-pattern scan reports zero matches.
+
 ## Bug Analysis: XenForo purchase succeeded or redirected without a parseable result
 
 ### 1. Root Cause Category
@@ -121,10 +167,10 @@ rejected held-only alternatives that isolated the missing pre-press pointer hist
 
 | Priority | Mechanism | Specific Action | Status |
 |---|---|---|---|
-| P0 | Request contract | Add `_xfResponseType=json` to every MineBBS XenForo POST | DONE |
+| P0 | Request contract | Add `_xfResponseType=json`, `_xfWithData=1`, and `_xfRequestUri` to every MineBBS XenForo AJAX POST | DONE |
 | P0 | Side-effect safety | Keep exactly one POST and confirm opaque purchases from a cached inventory delta | DONE |
 | P0 | Test coverage | Regress opaque redirect HTML, `0 -> 1` inventory, and exactly one POST | DONE |
-| P1 | Same-layer consistency | Parse error-free XenForo `status=ok` for purchase, form sign-in, and card application | DONE |
+| P1 | Same-layer consistency | Treat bare XenForo `status=ok` as envelope success only; require a business marker or authoritative state delta | DONE |
 | P1 | Documentation | Record response-mode and before/after confirmation contracts in backend spec and cross-layer guide | DONE |
 
 ### 4. Systematic Expansion

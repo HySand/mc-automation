@@ -122,6 +122,13 @@ After implementation:
       retries only in the former state
 - [ ] For external HTML forms, identified the action by origin, path, method, required field set,
       and unique submit control instead of localized button text
+- [ ] Traced multi-stage server workflows through each authoritative state transition (for example,
+      add-to-cart → checkout → inventory → configure → deployed) instead of treating an intermediate
+      transport success as final business completion
+- [ ] When a form exposes multiple submit operations, removed all unselected submit controls and
+      added only the intended operation; hidden-field extraction alone is not browser submission semantics
+- [ ] Discovered per-instance action IDs from the selected live item container instead of hard-coding
+      IDs observed in one account or fixture
 - [ ] For response payloads, made explicit failure fields and business-error markers override a
       generic transport/status success marker
 - [ ] For browser-submitted framework forms, included the framework's standard response-mode fields

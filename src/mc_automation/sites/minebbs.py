@@ -21,6 +21,7 @@ class _FormSubmission:
     action: str
     method: str
     data: dict[str, str]
+    request_uri: str
 
 
 class MineBBSAdapter:
@@ -66,22 +67,33 @@ class MineBBSAdapter:
             data[str(button["name"])] = str(button["value"])
         return data
 
-    def _unique_form(self, html: str, required_text: str) -> _FormSubmission:
-        soup = BeautifulSoup(html, "html.parser")
-        forms = [
-            form for form in soup.select("form") if required_text in form.get_text(" ", strip=True)
-        ]
-        if len(forms) != 1:
-            raise SiteParseError(f"MineBBS 未找到唯一的“{required_text}”表单")
-        form = forms[0]
-        action = str(form.get("action", ""))
-        if not action:
-            raise SiteParseError("MineBBS 表单缺少 action")
-        return _FormSubmission(
-            action=self._url(action),
-            method=str(form.get("method", "post")).upper(),
-            data=self._hidden_fields(form),
+    @staticmethod
+    def _request_uri(url: str) -> str:
+        parsed = urlsplit(url)
+        return parsed.path + (f"?{parsed.query}" if parsed.query else "")
+
+    @staticmethod
+    def _same_origin(left_url: str, right_url: str) -> bool:
+        left = urlsplit(left_url)
+        right = urlsplit(right_url)
+        try:
+            left_port = left.port or (443 if left.scheme.casefold() == "https" else 80)
+            right_port = right.port or (443 if right.scheme.casefold() == "https" else 80)
+        except ValueError:
+            return False
+        return (
+            left.scheme.casefold() == right.scheme.casefold()
+            and (left.hostname or "").casefold() == (right.hostname or "").casefold()
+            and left_port == right_port
         )
+
+    @classmethod
+    def _xenforo_form_data(cls, data: dict[str, str], page_url: str) -> dict[str, str]:
+        result = dict(data)
+        result["_xfResponseType"] = "json"
+        result["_xfWithData"] = "1"
+        result["_xfRequestUri"] = cls._request_uri(page_url)
+        return result
 
     def _purchase_form(self, html: str, page_url: str) -> _FormSubmission:
         soup = BeautifulSoup(html, "html.parser")
@@ -95,16 +107,7 @@ class MineBBSAdapter:
                 continue
             action = self._url(raw_action)
             parsed = urlsplit(action)
-            try:
-                parsed_port = parsed.port or (443 if parsed.scheme.casefold() == "https" else 80)
-                target_port = target.port or (443 if target.scheme.casefold() == "https" else 80)
-                same_origin = (
-                    parsed.scheme.casefold() == target.scheme.casefold()
-                    and (parsed.hostname or "").casefold() == (target.hostname or "").casefold()
-                    and parsed_port == target_port
-                )
-            except ValueError:
-                same_origin = False
+            same_origin = self._same_origin(action, page_url)
             field_names = {
                 str(field.get("name", ""))
                 for field in form.select("input[name], select[name], textarea[name]")
@@ -149,8 +152,164 @@ class MineBBSAdapter:
         form, action, method = candidates[0]
         data = self._hidden_fields(form)
         data["quantity"] = "1"
-        data["_xfResponseType"] = "json"
-        return _FormSubmission(action=action, method=method, data=data)
+        data = self._xenforo_form_data(data, page_url)
+        return _FormSubmission(
+            action=action,
+            method=method,
+            data=data,
+            request_uri=self._request_uri(page_url),
+        )
+
+    def _checkout_form(self, html: str, page_url: str, label: str) -> _FormSubmission | None:
+        soup = BeautifulSoup(html, "html.parser")
+        quantity_count = 0
+        target_label_seen = False
+        candidates: list[tuple[Tag, Tag, str, Tag, str]] = []
+        for form in soup.select("form"):
+            raw_action = str(form.get("action", ""))
+            method = str(form.get("method", "post")).upper()
+            if not raw_action or method != "POST":
+                continue
+            action = self._url(raw_action)
+            parsed = urlsplit(action)
+            if not self._same_origin(action, page_url) or (
+                parsed.path.rstrip("/") != "/tool-shop/checkout/update"
+            ):
+                continue
+            target_label_seen = target_label_seen or label in form.get_text(" ", strip=True)
+            quantities = form.select('input[name^="quantity["]')
+            quantity_count += len(quantities)
+            purchase_controls = form.select(
+                'button[name="purchase"], input[type="submit"][name="purchase"]'
+            )
+            if len(purchase_controls) != 1:
+                continue
+            for quantity in quantities:
+                quantity_name = str(quantity.get("name", ""))
+                key_match = re.fullmatch(r"quantity\[([^\]]+)\]", quantity_name)
+                if key_match is None:
+                    continue
+                container = quantity.parent
+                label_matched = False
+                while isinstance(container, Tag) and container is not form:
+                    if label in container.get_text(" ", strip=True):
+                        label_matched = True
+                        break
+                    container = container.parent
+                if not label_matched:
+                    continue
+                cart_key = key_match.group(1)
+                checkboxes = [
+                    checkbox
+                    for checkbox in form.select('input[name="cart_keys[]"][value]')
+                    if str(checkbox.get("value", "")) == cart_key
+                ]
+                if len(checkboxes) == 1:
+                    candidates.append(
+                        (
+                            form,
+                            quantity,
+                            cart_key,
+                            purchase_controls[0],
+                            action,
+                        )
+                    )
+
+        log_step(
+            "cart_inspection",
+            site=self.name,
+            status="completed" if len(candidates) <= 1 else "failed",
+            url=page_url,
+            control_count=len(candidates),
+            item_types=quantity_count,
+        )
+        if len(candidates) > 1 or (target_label_seen and not candidates):
+            raise SiteParseError("MineBBS 购物车目标道具结构无法唯一识别")
+        if not candidates:
+            return None
+
+        form, quantity, cart_key, purchase_control, action = candidates[0]
+        data = self._hidden_fields(form)
+        for submit_control in form.select(
+            'button[name], input[type="submit"][name], input[type="image"][name]'
+        ):
+            data.pop(str(submit_control.get("name", "")), None)
+        data[str(quantity["name"])] = "1"
+        data["cart_keys[]"] = cart_key
+        data["purchase"] = str(purchase_control.get("value", ""))
+        data = self._xenforo_form_data(data, page_url)
+        return _FormSubmission(
+            action=action,
+            method="POST",
+            data=data,
+            request_uri=self._request_uri(page_url),
+        )
+
+    def _deployment_submission(
+        self, inventory_html: str, inventory_url: str, label: str
+    ) -> _FormSubmission | None:
+        soup = BeautifulSoup(inventory_html, "html.parser")
+        configure_urls: list[str] = []
+        for container in soup.select(".itemList-item, .structItem, .block-row, li"):
+            if label not in container.get_text(" ", strip=True):
+                continue
+            for link in container.select('a[href][data-xf-click="overlay"]'):
+                configure_url = self._url(str(link.get("href", "")))
+                parsed = urlsplit(configure_url)
+                if self._same_origin(configure_url, inventory_url) and re.fullmatch(
+                    r"/tool-shop/inventory/\d+/configure", parsed.path
+                ):
+                    configure_urls.append(configure_url)
+        configure_urls = list(dict.fromkeys(configure_urls))
+        if not configure_urls:
+            return None
+        if len(configure_urls) != 1:
+            raise SiteParseError("MineBBS 无法唯一识别顶贴卡部署入口")
+        configure_url = configure_urls[0]
+        page = self.transport.get(configure_url)
+        configure_soup = BeautifulSoup(page.text, "html.parser")
+        candidates: list[tuple[Tag, str]] = []
+        for form in configure_soup.select("form"):
+            raw_action = str(form.get("action", ""))
+            method = str(form.get("method", "post")).upper()
+            if not raw_action or method != "POST":
+                continue
+            action = self._url(raw_action)
+            parsed_action = urlsplit(action)
+            parsed_configure = urlsplit(configure_url)
+            if not self._same_origin(action, configure_url) or (
+                parsed_action.path.rstrip("/") != parsed_configure.path.rstrip("/")
+            ):
+                continue
+            fields = {
+                str(field.get("name", ""))
+                for field in form.select("input[name], select[name], textarea[name]")
+            }
+            submit_controls = form.select(
+                'button[type="submit"], button:not([type]), input[type="submit"]'
+            )
+            if "code[contentid]" in fields and len(submit_controls) == 1:
+                candidates.append((form, action))
+        log_step(
+            "deployment_inspection",
+            site=self.name,
+            status="completed" if len(candidates) == 1 else "failed",
+            url=configure_url,
+            form_count=len(configure_soup.select("form")),
+            control_count=len(candidates),
+        )
+        if len(candidates) != 1:
+            raise SiteParseError("MineBBS 无法唯一识别顶贴卡部署表单")
+        form, action = candidates[0]
+        data = self._hidden_fields(form)
+        data["code[contentid]"] = self.thread_id
+        data = self._xenforo_form_data(data, configure_url)
+        return _FormSubmission(
+            action=action,
+            method="POST",
+            data=data,
+            request_uri=self._request_uri(configure_url),
+        )
 
     def _submit(self, submission: _FormSubmission) -> str:
         if submission.method == "GET":
@@ -158,6 +317,8 @@ class MineBBSAdapter:
         elif submission.method == "POST":
             data = dict(submission.data)
             data["_xfResponseType"] = "json"
+            data["_xfWithData"] = "1"
+            data["_xfRequestUri"] = submission.request_uri
             response = self.transport.post(
                 submission.action,
                 data=data,
@@ -177,10 +338,17 @@ class MineBBSAdapter:
             return False, None
         if payload.get("success") is False or payload.get("errors") or payload.get("error"):
             return True, False
-        status = str(payload.get("status", "")).casefold()
-        if payload.get("success") is True or status in {"ok", "success", "completed"}:
+        if payload.get("success") is True:
             return True, True
         return True, None
+
+    @staticmethod
+    def _decoded_result_text(result: str) -> str:
+        try:
+            payload = json.loads(result)
+        except (TypeError, json.JSONDecodeError):
+            return result
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, dict) else result
 
     def authenticate(self) -> ActionResult:
         page = self.transport.get(self._url("login/"))
@@ -235,12 +403,16 @@ class MineBBSAdapter:
             submission = _FormSubmission(
                 self._url(str(form.get("action", ""))),
                 str(form.get("method", "post")).upper(),
-                self._hidden_fields(form),
+                self._xenforo_form_data(self._hidden_fields(form), self.base_url),
+                self._request_uri(self.base_url),
             )
             result_text = self._submit(submission)
         _json_response, json_outcome = self._json_submission_outcome(result_text)
-        if json_outcome is True or any(
-            marker in result_text for marker in ("签到成功", "已签到", "success")
+        decoded_result = self._decoded_result_text(result_text)
+        if (
+            json_outcome is True
+            or any(marker in decoded_result for marker in ("签到成功", "已签到"))
+            or (not _json_response and "success" in result_text.casefold())
         ):
             return self._result("daily_sign_in", ActionStatus.SUCCESS, "签到完成")
         return self._result(
@@ -294,7 +466,7 @@ class MineBBSAdapter:
         if author_name != self.config.username:
             raise SiteParseError("MineBBS 目标帖不属于配置账号，拒绝操作")
 
-    def _inventory_page(self) -> str | None:
+    def _inventory_page(self) -> tuple[str, str] | None:
         pages = [self.transport.get(self.base_url), self.transport.get(self._url("tool-shop/"))]
         candidates: list[str] = []
         for page in pages:
@@ -309,25 +481,32 @@ class MineBBSAdapter:
         unique = list(dict.fromkeys(candidates))
         if len(unique) != 1:
             return None
-        return self.transport.get(unique[0]).text
+        return unique[0], self.transport.get(unique[0]).text
 
-    def get_inventory(self) -> Inventory:
-        html = self._inventory_page()
-        if html is None:
-            raise SiteParseError("MineBBS 无法唯一识别道具库存页面")
+    def _inventory_items(self, html: str) -> dict[str, int]:
         soup = BeautifulSoup(html, "html.parser")
 
         def count_item(label: str) -> int:
             total = 0
-            for container in soup.select("form, .structItem, .block-row, li"):
+            containers = soup.select(".itemList-item") or soup.select(
+                "form, .structItem, .block-row, li"
+            )
+            for container in containers:
                 text = container.get_text(" ", strip=True)
-                if label not in text or "使用" not in text:
+                if label not in text or not any(action in text for action in ("使用", "部署")):
                     continue
                 match = re.search(r"(?:数量|拥有)\s*[:：x×]?\s*(\d+)", text)
                 total += int(match.group(1)) if match else 1
             return total
 
-        items = {"purple": count_item(self.PURPLE_CARD), "gold": count_item(self.GOLD_CARD)}
+        return {"purple": count_item(self.PURPLE_CARD), "gold": count_item(self.GOLD_CARD)}
+
+    def get_inventory(self) -> Inventory:
+        inventory_page = self._inventory_page()
+        if inventory_page is None:
+            raise SiteParseError("MineBBS 无法唯一识别道具库存页面")
+        _page_url, html = inventory_page
+        items = self._inventory_items(html)
         self._last_inventory = dict(items)
         return Inventory(items)
 
@@ -342,38 +521,110 @@ class MineBBSAdapter:
         return after > before
 
     def _purchase(self, item_id: int, label: str, item_key: str) -> ActionResult:
-        page_url = self._url(f"tool-shop/{item_id}/purchase")
-        page = self.transport.get(page_url)
-        submission = self._purchase_form(page.text, page_url)
+        checkout_url = self._url("tool-shop/checkout")
+        checkout = self._checkout_form(
+            self.transport.get(checkout_url).text,
+            checkout_url,
+            label,
+        )
+        if checkout is None:
+            page_url = self._url(f"tool-shop/{item_id}/purchase")
+            page = self.transport.get(page_url)
+            add_submission = self._purchase_form(page.text, page_url)
+            log_step(
+                "cart_add",
+                site=self.name,
+                status="started",
+                url=add_submission.action,
+                submit_method=add_submission.method,
+                field_names=sorted(add_submission.data),
+                field_count=len(add_submission.data),
+            )
+            add_result = self._submit(add_submission)
+            decoded_add_result = self._decoded_result_text(add_result)
+            _add_json, add_outcome = self._json_submission_outcome(add_result)
+            add_insufficient = any(
+                marker in decoded_add_result for marker in ("不足", "余额", "限购", "无法购买")
+            )
+            if add_insufficient:
+                log_step("cart_add", site=self.name, status="failed", url=add_submission.action)
+                return self._result(
+                    "purchase_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, f"无法购买{label}"
+                )
+            if add_outcome is False:
+                log_step("cart_add", site=self.name, status="failed", url=add_submission.action)
+                return self._result(
+                    "purchase_bump_item",
+                    ActionStatus.TECHNICAL_FAILURE,
+                    f"{label}加入购物车失败",
+                )
+            checkout = self._checkout_form(
+                self.transport.get(checkout_url).text,
+                checkout_url,
+                label,
+            )
+            log_step(
+                "cart_add",
+                site=self.name,
+                status="completed" if checkout is not None else "failed",
+                url=add_submission.action,
+            )
+            if checkout is None:
+                return self._result(
+                    "purchase_bump_item",
+                    ActionStatus.TECHNICAL_FAILURE,
+                    f"{label}未出现在购物车",
+                )
+
         log_step(
-            "form_submission",
+            "cart_checkout",
             site=self.name,
             status="started",
-            url=submission.action,
-            submit_method=submission.method,
-            field_names=sorted(submission.data),
-            field_count=len(submission.data),
+            url=checkout.action,
+            submit_method=checkout.method,
+            field_names=sorted(checkout.data),
+            field_count=len(checkout.data),
         )
-        result = self._submit(submission)
-        result_lower = result.casefold()
+        result = self._submit(checkout)
+        decoded_result = self._decoded_result_text(result)
         json_response, json_outcome = self._json_submission_outcome(result)
         insufficient_marker = any(
-            marker in result for marker in ("不足", "余额", "限购", "无法购买")
+            marker in decoded_result for marker in ("不足", "余额", "限购", "无法购买")
         )
-        if json_response:
-            success_marker = json_outcome is True and not insufficient_marker
-        else:
-            success_marker = any(
-                marker in result_lower for marker in ("购买成功", "success", "已购买")
+        if insufficient_marker:
+            log_step("cart_checkout", site=self.name, status="failed", url=checkout.action)
+            return self._result(
+                "purchase_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, f"无法购买{label}"
             )
-        if success_marker:
+        if json_outcome is False:
+            log_step("cart_checkout", site=self.name, status="failed", url=checkout.action)
+            return self._result(
+                "purchase_bump_item", ActionStatus.TECHNICAL_FAILURE, f"{label}结算失败"
+            )
+
+        success_marker = json_outcome is True or any(
+            marker in decoded_result for marker in ("购买成功", "已购买")
+        )
+        if not json_response and "success" in decoded_result.casefold():
+            success_marker = True
+        inventory_confirmed = False
+        if not success_marker:
+            inventory_confirmed = self._confirm_purchase_in_inventory(item_key)
             log_step(
-                "form_submission",
+                "purchase_confirmation",
+                site=self.name,
+                status="completed" if inventory_confirmed else "failed",
+                inventory_confirmed=inventory_confirmed,
+            )
+        if success_marker or inventory_confirmed:
+            log_step(
+                "cart_checkout",
                 site=self.name,
                 status="completed",
-                url=submission.action,
+                url=checkout.action,
                 json_response=json_response,
-                success_marker=True,
+                success_marker=success_marker,
+                inventory_confirmed=inventory_confirmed,
                 result_status=ActionStatus.SUCCESS.value,
             )
             self._preferred_item = label
@@ -384,52 +635,11 @@ class MineBBSAdapter:
                 f"已购买 1 张{label}",
                 metadata={"item": item_key},
             )
-        if insufficient_marker:
-            log_step(
-                "form_submission",
-                site=self.name,
-                status="completed",
-                url=submission.action,
-                json_response=json_response,
-                success_marker=False,
-                result_status=ActionStatus.INSUFFICIENT_RESOURCES.value,
-            )
-            return self._result(
-                "purchase_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, f"无法购买{label}"
-            )
-        inventory_confirmed = False
-        if json_outcome is not False:
-            inventory_confirmed = self._confirm_purchase_in_inventory(item_key)
-            log_step(
-                "purchase_confirmation",
-                site=self.name,
-                status="completed" if inventory_confirmed else "failed",
-                inventory_confirmed=inventory_confirmed,
-            )
-        if inventory_confirmed:
-            log_step(
-                "form_submission",
-                site=self.name,
-                status="completed",
-                url=submission.action,
-                json_response=json_response,
-                success_marker=False,
-                inventory_confirmed=True,
-                result_status=ActionStatus.SUCCESS.value,
-            )
-            self._preferred_item = label
-            return ActionResult(
-                self.name,
-                "purchase_bump_item",
-                ActionStatus.SUCCESS,
-                f"已购买 1 张{label}（库存已确认）",
-                metadata={"item": item_key},
-            )
         log_step(
-            "form_submission",
+            "cart_checkout",
             site=self.name,
             status="failed",
-            url=submission.action,
+            url=checkout.action,
             json_response=json_response,
             success_marker=False,
             result_status=ActionStatus.TECHNICAL_FAILURE.value,
@@ -457,48 +667,68 @@ class MineBBSAdapter:
         )
 
     def apply_bump_item(self) -> ActionResult:
-        html = self._inventory_page()
-        if html is None:
+        inventory_page = self._inventory_page()
+        if inventory_page is None:
             raise SiteParseError("MineBBS 无法唯一识别道具库存页面")
+        page_url, html = inventory_page
+        inventory_before = self._inventory_items(html)
+        self._last_inventory = dict(inventory_before)
         label_order = [self._preferred_item] if self._preferred_item else []
         label_order.extend([self.PURPLE_CARD, self.GOLD_CARD])
         for label in dict.fromkeys(item for item in label_order if item):
-            try:
-                submission = self._unique_form(html, f"{label}")
-            except SiteParseError:
+            item_key = "purple" if label == self.PURPLE_CARD else "gold"
+            if inventory_before.get(item_key, 0) <= 0:
                 continue
-            soup = BeautifulSoup(html, "html.parser")
-            forms = [
-                form for form in soup.select("form") if label in form.get_text(" ", strip=True)
-            ]
-            form = forms[0]
-            target_bound = any(
-                self.thread_id == value
-                for name, value in submission.data.items()
-                if name.casefold() in {"thread", "thread_id", "threadid", "tid"}
+            submission = self._deployment_submission(html, page_url, label)
+            if submission is None:
+                raise SiteParseError("MineBBS 顶贴卡缺少唯一部署入口")
+            log_step(
+                "deployment_submission",
+                site=self.name,
+                status="started",
+                url=submission.action,
+                submit_method=submission.method,
+                field_names=sorted(submission.data),
+                field_count=len(submission.data),
             )
-            for select in form.select("select[name]"):
-                for option in select.select("option[value]"):
-                    if self.thread_id in option.get_text(" ", strip=True) or self.thread_id in str(
-                        option.get("value", "")
-                    ):
-                        submission.data[str(select["name"])] = str(option["value"])
-                        target_bound = True
-                        break
-            if not target_bound:
-                raise SiteParseError("MineBBS 顶贴表单未提供配置的目标帖，拒绝提交")
             result = self._submit(submission)
             _json_response, json_outcome = self._json_submission_outcome(result)
-            if json_outcome is True or any(
-                marker in result for marker in ("使用成功", "顶贴成功", "success")
+            decoded_result = self._decoded_result_text(result)
+            if (
+                json_outcome is True
+                or any(
+                    marker in decoded_result for marker in ("道具已部署", "部署成功", "顶贴成功")
+                )
+                or (not _json_response and "success" in result.casefold())
             ):
-                return self._result("apply_bump_item", ActionStatus.SUCCESS, f"{label}使用成功")
-            if any(marker in result for marker in ("过期", "不存在", "冷却", "无法使用")):
+                log_step(
+                    "deployment_submission",
+                    site=self.name,
+                    status="completed",
+                    url=submission.action,
+                )
+                return self._result("apply_bump_item", ActionStatus.SUCCESS, f"{label}已部署")
+            if any(marker in decoded_result for marker in ("过期", "不存在", "冷却", "无法使用")):
                 return self._result(
                     "apply_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, f"{label}不可用"
                 )
+            try:
+                after = self.get_inventory().items.get(item_key, 0)
+            except SiteParseError:
+                after = inventory_before.get(item_key, 0)
+            inventory_confirmed = after < inventory_before.get(item_key, 0)
+            log_step(
+                "apply_confirmation",
+                site=self.name,
+                status="completed" if inventory_confirmed else "failed",
+                inventory_confirmed=inventory_confirmed,
+            )
+            if inventory_confirmed:
+                return self._result(
+                    "apply_bump_item", ActionStatus.SUCCESS, f"{label}已部署（库存已确认）"
+                )
             return self._result(
-                "apply_bump_item", ActionStatus.TECHNICAL_FAILURE, f"使用{label}后未识别到明确结果"
+                "apply_bump_item", ActionStatus.TECHNICAL_FAILURE, f"部署{label}后未识别到明确结果"
             )
         return self._result(
             "apply_bump_item", ActionStatus.INSUFFICIENT_RESOURCES, "没有可用顶贴卡"

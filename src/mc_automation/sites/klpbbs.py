@@ -480,21 +480,15 @@ class KLPBBSAdapter:
         return None
 
     def authenticate(self) -> ActionResult:
-        login_page = self.transport.get(self._url("member.php?mod=logging&action=login"))
-        formhash = self._formhash(login_page.text)
+        self.transport.get(self._url("member.php?mod=logging&action=login"))
         data = {
-            "loginfield": "username",
             "username": self.config.username,
             "password": self.config.password,
-            "questionid": "0",
-            "answer": "",
-            "cookietime": "2592000",
-            "loginsubmit": "yes",
         }
-        if formhash:
-            data["formhash"] = formhash
         self.transport.post(
-            self._url("member.php?mod=logging&action=login&loginsubmit=yes"), data=data
+            self._url("member.php?mod=logging&action=login&loginsubmit=yes"),
+            data=data,
+            headers={"Origin": self.base_url, "Referer": f"{self.base_url}/"},
         )
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):

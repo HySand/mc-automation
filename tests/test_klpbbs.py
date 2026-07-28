@@ -72,7 +72,7 @@ def test_adapter_has_no_forum_reply_api() -> None:
     assert not hasattr(KLPBBSAdapter, "reply_bump")
 
 
-def test_authenticate_submits_current_formhash_and_verifies_session() -> None:
+def test_authenticate_submits_reference_payload_and_verifies_session() -> None:
     transport = FakeTransport(
         {
             "https://example.test/member.php?mod=logging&action=login": (
@@ -90,7 +90,11 @@ def test_authenticate_submits_current_formhash_and_verifies_session() -> None:
 
     assert result.status is ActionStatus.SUCCESS
     post = next(call for call in transport.calls if call[0] == "POST")
-    assert post[2]["data"]["formhash"] == "abc123"
+    assert post[2]["data"] == {"username": "owner", "password": "secret"}
+    assert post[2]["headers"] == {
+        "Origin": "https://example.test",
+        "Referer": "https://example.test/",
+    }
     assert post[2]["data"]["username"] == "owner"
     assert adapter.authenticated_uid == "1"
 
