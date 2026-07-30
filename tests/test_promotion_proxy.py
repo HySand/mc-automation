@@ -49,8 +49,10 @@ class SourceSession:
         self.responses = responses
         self.headers: dict[str, str] = {}
         self.trust_env = True
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def get(self, url: str, **kwargs: Any) -> StubResponse:
+        self.calls.append((url, kwargs))
         response = self.responses[url]
         if isinstance(response, Exception):
             raise response
@@ -177,17 +179,35 @@ def test_dynamic_pool_has_no_default_per_source_quota() -> None:
     assert len(pool.load()) == 4
 
 
-def test_dynamic_pool_has_no_default_global_candidate_limit() -> None:
+def test_dynamic_pool_can_disable_the_default_global_candidate_limit() -> None:
     source_url = "https://source.invalid/many"
     proxies = "\n".join(f"8.8.{index // 250}.{index % 250 + 1}:80" for index in range(600))
     session = SourceSession({source_url: StubResponse(proxies.encode())})
     pool = DynamicProxyPool(
         sources=(ProxySource("many", source_url),),
         session=session,
+        candidate_limit=None,
         random_source=random.Random(0),
     )
 
     assert len(pool.load()) == 600
+
+
+def test_dynamic_pool_stops_after_reference_sized_candidate_set() -> None:
+    first = ProxySource("checked", "https://checked.test")
+    second = ProxySource("aggregate", "https://aggregate.test")
+    first_payload = "\n".join(f"8.8.{index // 250}.{index % 250 + 1}:80" for index in range(500))
+    session = SourceSession(
+        {
+            first.url: StubResponse(first_payload.encode()),
+            second.url: StubResponse(b"1.1.1.1:80"),
+        }
+    )
+
+    loaded = DynamicProxyPool(sources=(first, second), session=session).load()
+
+    assert len(loaded) == 500
+    assert [call[0] for call in session.calls] == [first.url]
 
 
 def test_dynamic_pool_preserves_source_priority_while_shuffling_within_source() -> None:

@@ -69,11 +69,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Any `requests` transport failure from an untrusted proxy, including timeout, connection, TLS,
   proxy, and truncated/chunked response errors, is an expected failed candidate: it consumes that
   proxy and immediately advances to the next one without failing the KLPBBS adapter.
-- The pool globally deduplicates every candidate returned by the bounded finite sources and shuffles
-  within each source. It preserves source order so fresh checked lists are consumed before older
-  aggregates. It has no global candidate count or per-source quota. A source failure is isolated;
-  otherwise all valid candidates from that source remain eligible until task completion or natural
-  pool exhaustion.
+- The pool globally deduplicates candidates and shuffles within each source. It preserves source
+  order so checked lists are consumed before older aggregates, and stops source loading after the
+  default 500 unique candidates used by the reference implementation. The cap may be disabled only
+  by an explicit constructor argument in tests or diagnostics. A source failure is isolated.
 - Fresh checked sources (`proxifly-http`, `openproxylist-https`, `yakumo-http-checked`, and
   `kangproxy-https`) are loaded before the reference project's older aggregate sources. The source
   URLs are finite static files and remain subject to the same response-size, public-IP, port,
@@ -709,6 +708,11 @@ KLPBBS ownership compares the authenticated Discuz UID discovered after login wi
 author UID encoded in `space-uid-<UID>.html` or `home.php?mod=space&uid=<UID>`. The configured login
 identifier may be an email address and must never be compared directly with the public display name.
 
+KLPBBS inventory parsing follows Discuz's live magic-box structure: a bump card is identified by
+`#magic_bump`, a `magicid=10` use link, or an equivalent `mid=bump` control; an adjacent localized
+quantity is authoritative when present. `p.emp` is an explicit empty inventory. An unrecognized
+page without the `pg_magic` structure remains a parse failure before purchase or use.
+
 All execution paths emit JSONL step logs through the closed metadata allowlist in `step_log.py`.
 HTTP URLs retain only scheme, host, port, and path. WDSJFWQ logs image size, model attempt status,
 confidence, code length, field names, and public count changes without image/code/form values. ESA
@@ -765,8 +769,10 @@ and prove logged field names never expose values. Deployment regressions must us
 a dynamic `/inventory/<id>/configure` overlay, and `code[contentid]`; they must reject ambiguous or
 missing controls without posting. KLPBBS regressions must cover a known empty task
 center, doing-list precedence, primary/canonical/primary rank recovery, and one login POST followed
-by up to three read-only session-confirmation GETs, with the exact two-field reference payload. The
-quality gate is:
+by up to three read-only session-confirmation GETs, with the exact two-field reference payload.
+Inventory regressions must cover the live `magic_bump`/`magicid=10` representation, numeric quantity,
+the Discuz `p.emp` empty state, and rejection of unrelated HTML. Proxy-pool regressions must prove the
+default 500-candidate boundary stops later aggregate source downloads. The quality gate is:
 
 ```text
 ruff format --check .

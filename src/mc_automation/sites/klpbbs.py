@@ -640,16 +640,24 @@ class KLPBBSAdapter:
     def get_inventory(self) -> Inventory:
         page = self.transport.get(self._url("home.php?mod=magic&action=mybox"))
         soup = BeautifulSoup(page.text, "html.parser")
-        candidates = soup.select('a[href*="mid=bump"], input[value="bump"]')
-        count = len(candidates)
+        candidates = soup.select(
+            '[id="magic_bump"], [id^="magic_bump_"], '
+            'a[href*="mid=bump"], a[href*="magicid=10"], input[value="bump"]'
+        )
         text = soup.get_text(" ", strip=True)
-        if count == 0 and "提升卡" in text:
-            count = 1
-        if count == 0 and not any(
-            marker in text for marker in ("暂无道具", "没有道具", "道具箱为空", "您还没有道具")
+        count_match = re.search(r"提升卡.*?(?:数量|道具数量)\s*[:：]?\s*(\d+)", text)
+        if count_match is not None:
+            return Inventory({"bump": int(count_match.group(1))})
+        if candidates or "提升卡" in text:
+            return Inventory({"bump": 1})
+        if soup.select_one("p.emp") is not None or any(
+            marker in text
+            for marker in ("暂无道具", "没有道具", "道具箱为空", "您还没有道具", "暂无相关数据")
         ):
+            return Inventory({"bump": 0})
+        if soup.select_one("body.pg_magic") is None:
             raise SiteParseError("KLPBBS 道具库存结构无法识别")
-        return Inventory({"bump": count})
+        return Inventory({"bump": 0})
 
     def purchase_bump_item(self, *, excluded_items: frozenset[str] = frozenset()) -> ActionResult:
         if "bump" in excluded_items:

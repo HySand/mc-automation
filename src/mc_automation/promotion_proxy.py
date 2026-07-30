@@ -20,6 +20,7 @@ from .transport import TransportError
 
 DEFAULT_SOURCE_MAX_BYTES = 2_000_000
 DEFAULT_PROXY_WORKERS = 20
+DEFAULT_CANDIDATE_LIMIT = 500
 PROMOTION_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 "
@@ -77,6 +78,11 @@ def default_proxy_sources(today: date | None = None) -> tuple[ProxySource, ...]:
     )
     fresh_sources = (
         ProxySource(
+            "yakumo-http-checked",
+            "https://raw.githubusercontent.com/elliottophellia/yakumo/master/"
+            "results/http/global/http_checked.txt",
+        ),
+        ProxySource(
             "proxifly-http",
             "https://raw.githubusercontent.com/proxifly/free-proxy-list/"
             "main/proxies/protocols/http/data.txt",
@@ -84,11 +90,6 @@ def default_proxy_sources(today: date | None = None) -> tuple[ProxySource, ...]:
         ProxySource(
             "openproxylist-https",
             "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt",
-        ),
-        ProxySource(
-            "yakumo-http-checked",
-            "https://raw.githubusercontent.com/elliottophellia/yakumo/master/"
-            "results/http/global/http_checked.txt",
         ),
         ProxySource(
             "kangproxy-https",
@@ -219,7 +220,7 @@ class DynamicProxyPool:
         *,
         sources: Sequence[ProxySource] | None = None,
         session: requests.Session | None = None,
-        candidate_limit: int | None = None,
+        candidate_limit: int | None = DEFAULT_CANDIDATE_LIMIT,
         source_timeout: tuple[float, float] = (5.0, 15.0),
         source_max_bytes: int = DEFAULT_SOURCE_MAX_BYTES,
         per_source_limit: int | None = None,

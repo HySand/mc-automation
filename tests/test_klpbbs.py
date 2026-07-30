@@ -274,6 +274,37 @@ def test_inventory_distinguishes_explicitly_empty_from_unparseable() -> None:
         changed.get_inventory()
 
 
+def test_inventory_parses_live_discuz_magic_box_shape() -> None:
+    inventory_url = "https://example.test/home.php?mod=magic&action=mybox"
+    adapter = KLPBBSAdapter(
+        config(),
+        FakeTransport(
+            {
+                inventory_url: (
+                    '<body class="pg_magic"><div id="magic_bump">'
+                    "<strong>提升卡</strong><p>道具数量: <font>3</font></p>"
+                    '<a href="home.php?mod=magic&action=mybox&operation=use&magicid=10">'
+                    "使用</a></div></body>"
+                )
+            }
+        ),
+        base_url="https://example.test",
+    )
+
+    assert adapter.get_inventory().items == {"bump": 3}
+
+
+def test_inventory_accepts_live_discuz_empty_state() -> None:
+    inventory_url = "https://example.test/home.php?mod=magic&action=mybox"
+    adapter = KLPBBSAdapter(
+        config(),
+        FakeTransport({inventory_url: '<body class="pg_magic"><p class="emp">暂无相关数据</p>'}),
+        base_url="https://example.test",
+    )
+
+    assert adapter.get_inventory().items == {"bump": 0}
+
+
 def test_target_owner_must_match_authenticated_uid_when_login_uses_email() -> None:
     thread_url = "https://example.test/thread-42-1-1.html"
     account_url = "https://example.test"
