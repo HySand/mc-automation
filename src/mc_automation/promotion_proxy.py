@@ -333,7 +333,7 @@ class ProxyPromotionVisitor:
         session = self.session_factory()
         session.trust_env = False
         session.cookies.clear()
-        session.headers.clear()
+        session.headers.pop("Cookie", None)
         session.headers.update(
             {
                 "User-Agent": PROMOTION_USER_AGENT,
