@@ -15,8 +15,7 @@
 - 每个站点每轮最多完成一次购买/使用事务；状态丢失时先保守地执行登录、签到和读取检查。
 - 检测到登录限制、验证码、Cloudflare/WAF 挑战或未知页面时，该站点在本轮立即停止并报告 `manual_intervention`；后续调度仍会重新尝试，不写入跨运行暂停标记。
 - KLPBBS 使用独立的 `cloudscraper` 会话；其他站点默认使用普通 `requests` 会话，所有响应仍经过统一挑战检测。MineBBS 首次通过 `CloakBrowser` 清除 ESA 后会锁定到同源浏览器传输，避免切回 Python HTTP/TLS 指纹后再次被拦截。
-- KLPBBS 推广任务参考 `klpAutomation`，并优先消费每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；每个来源内部随机打散，来源之间保持新鲜度优先级，全局去重后每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。
-- KLPBBS 推广任务参考 `klpAutomation`，并优先消费每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；每个来源内部随机打散，来源之间保持新鲜度优先级，全局去重后每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。任务中心返回不完整空壳且无法确认“进行中”时只安全跳过推广，不访问代理池，也不阻断 KLPBBS 的排名、所有权和官方顶帖流程。
+- KLPBBS 推广任务参考 `klpAutomation`，并加载每小时更新的 OpenProxyList、Yakumo 和 KangProxy checked 列表；所有来源合并并全局去重后统一随机打乱，避免连续批次由单一来源主导。每批最多用 20 个 worker 并行点击站点校验过的同源推广链接。代理失败时继续下一批，HTTP 成功不等于任务进度。每批后由主线程读取任务页 `#csc_1` 的实际百分比，直到完成领奖或所有来源候选自然耗尽。只有推广点击绕过 WARP 路由选择，代理源下载、任务申请、状态检查和领奖仍走 WARP。任务中心返回不完整空壳且无法确认“进行中”时只安全跳过推广，不访问代理池，也不阻断 KLPBBS 的排名、所有权和官方顶帖流程。
 - MineBBS ESA 滑块可选使用免费版 `CloakBrowser` 读取滑块与轨道的 DOM 几何信息，并通过原始 Playwright 鼠标拖到末端；不截图、不调用 AI。验证通过后，同源 GET/HEAD/POST 均继续使用 Chromium 网络栈。WDSJFWQ 图片验证码仍可独立启用 OpenAI-compatible 视觉模型。
 
 ## 配置

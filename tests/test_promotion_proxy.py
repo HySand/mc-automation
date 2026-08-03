@@ -190,7 +190,7 @@ def test_dynamic_pool_has_no_default_global_candidate_limit() -> None:
     assert len(pool.load()) == 600
 
 
-def test_dynamic_pool_preserves_source_priority_while_shuffling_within_source() -> None:
+def test_dynamic_pool_shuffles_the_merged_proxy_pool() -> None:
     first_url = "https://source.invalid/fresh"
     second_url = "https://source.invalid/old"
     session = SourceSession(
@@ -199,15 +199,36 @@ def test_dynamic_pool_preserves_source_priority_while_shuffling_within_source() 
             second_url: StubResponse(b"9.9.9.9:80\n208.67.222.222:80\n"),
         }
     )
+
+    class RotateRandom(random.Random):
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, ...]] = []
+
+        def shuffle(self, values: list[str]) -> None:
+            self.calls.append(tuple(values))
+            values[:] = values[1:] + values[:1]
+
+    random_source = RotateRandom()
     pool = DynamicProxyPool(
         sources=(ProxySource("fresh", first_url), ProxySource("old", second_url)),
         session=session,
-        random_source=random.Random(0),
+        random_source=random_source,
     )
 
-    loaded = pool.load()
-    assert set(loaded[:2]) == {"http://8.8.8.8:80", "http://1.1.1.1:80"}
-    assert set(loaded[2:]) == {"http://9.9.9.9:80", "http://208.67.222.222:80"}
+    assert pool.load() == (
+        "http://1.1.1.1:80",
+        "http://9.9.9.9:80",
+        "http://208.67.222.222:80",
+        "http://8.8.8.8:80",
+    )
+    assert random_source.calls == [
+        (
+            "http://8.8.8.8:80",
+            "http://1.1.1.1:80",
+            "http://9.9.9.9:80",
+            "http://208.67.222.222:80",
+        )
+    ]
 
 
 def test_proxy_visitor_matches_reference_request_behavior() -> None:

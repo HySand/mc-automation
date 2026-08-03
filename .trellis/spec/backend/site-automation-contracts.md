@@ -69,10 +69,10 @@ The automation is fail-closed: ambiguous external HTML never becomes a guessed s
 - Any `requests` transport failure from an untrusted proxy, including timeout, connection, TLS,
   proxy, and truncated/chunked response errors, is an expected failed candidate: it consumes that
   proxy and immediately advances to the next one without failing the KLPBBS adapter.
-- The pool globally deduplicates candidates and shuffles within each source. It preserves source
-  order so checked lists are consumed before older aggregates, and stops source loading after the
-  default 500 unique candidates used by the reference implementation. The cap may be disabled only
-  by an explicit constructor argument in tests or diagnostics. A source failure is isolated.
+- The pool globally deduplicates every candidate returned by the bounded finite sources, then
+  shuffles the complete merged pool so consecutive batches are not dominated by one source. It has
+  no default global candidate count or per-source quota. A source failure is isolated; otherwise all
+  valid candidates remain eligible until completion or natural exhaustion.
 - Fresh checked sources (`proxifly-http`, `openproxylist-https`, `yakumo-http-checked`, and
   `kangproxy-https`) are loaded before the reference project's older aggregate sources. The source
   URLs are finite static files and remain subject to the same response-size, public-IP, port,
@@ -771,8 +771,8 @@ missing controls without posting. KLPBBS regressions must cover a known empty ta
 center, doing-list precedence, primary/canonical/primary rank recovery, and one login POST followed
 by up to three read-only session-confirmation GETs, with the exact two-field reference payload.
 Inventory regressions must cover the live `magic_bump`/`magicid=10` representation, numeric quantity,
-the Discuz `p.emp` empty state, and rejection of unrelated HTML. Proxy-pool regressions must prove the
-default 500-candidate boundary stops later aggregate source downloads. The quality gate is:
+the Discuz `p.emp` empty state, and rejection of unrelated HTML. Proxy-pool regressions must prove
+that later sources remain available after an earlier source exceeds 500 candidates. The quality gate is:
 
 ```text
 ruff format --check .

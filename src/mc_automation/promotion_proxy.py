@@ -286,7 +286,6 @@ class DynamicProxyPool:
                     proxy_count=source_added,
                 )
                 continue
-            self.random_source.shuffle(source_candidates)
             candidates.extend(source_candidates)
             log_step(
                 "promotion_proxy_source",
@@ -300,6 +299,7 @@ class DynamicProxyPool:
 
         if not unique:
             raise ProxyPoolExhausted("所有动态代理源均不可用或未返回有效公共 HTTP 代理")
+        self.random_source.shuffle(candidates)
         self._loaded = tuple(candidates)
         return self._loaded
 
